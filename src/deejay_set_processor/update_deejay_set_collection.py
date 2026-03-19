@@ -1,9 +1,14 @@
+import datetime as dt
+import json
+import os
 import re
 
 import kaiano.config as config
 from kaiano import logger as logger_mod
 from kaiano.google import GoogleAPI
 from kaiano.json import create_collection_snapshot, write_json_snapshot
+
+from deejay_set_processor.pipeline_evaluator import evaluate_pipeline_run
 
 log = logger_mod.get_logger()
 
@@ -166,6 +171,54 @@ def generate_dj_set_collection():
     )
     log.info("Completed reordering sheets")
     log.info("✅ Finished generate_dj_set_collection")
+
+    # Phase 3 Step 8: post-pipeline AI evaluation (best-effort; never fails the pipeline).
+    try:
+        anthropic_api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+        api_base_url = (os.getenv("KAIANO_API_BASE_URL") or "").strip()
+        if not anthropic_api_key:
+            log.warning("ANTHROPIC_API_KEY not set — skipping pipeline evaluation.")
+        elif not api_base_url:
+            log.warning("KAIANO_API_BASE_URL not set — skipping pipeline evaluation.")
+        else:
+            run_id = os.getenv("GITHUB_RUN_ID") or dt.datetime.now(dt.UTC).isoformat()
+            sets_imported = int(os.getenv("SETS_IMPORTED") or "0")
+            sets_failed = int(os.getenv("SETS_FAILED") or "0")
+            sets_skipped = int(os.getenv("SETS_SKIPPED") or "0")
+            total_tracks = int(os.getenv("TOTAL_TRACKS") or "0")
+
+            failed_set_labels_raw = (os.getenv("FAILED_SET_LABELS") or "").strip()
+            failed_set_labels: list[str] = []
+            if failed_set_labels_raw:
+                try:
+                    parsed = json.loads(failed_set_labels_raw)
+                    if isinstance(parsed, list):
+                        failed_set_labels = [str(x) for x in parsed]
+                except Exception:
+                    failed_set_labels = [
+                        s.strip() for s in failed_set_labels_raw.split(",") if s.strip()
+                    ]
+
+            api_ingest_success_raw = (
+                (os.getenv("API_INGEST_SUCCESS") or "").strip().lower()
+            )
+            api_ingest_success = api_ingest_success_raw in {"1", "true", "yes", "y"}
+
+            result = evaluate_pipeline_run(
+                run_id=run_id,
+                repo="deejay-set-processor-dev",
+                sets_imported=sets_imported,
+                sets_failed=sets_failed,
+                sets_skipped=sets_skipped,
+                total_tracks=total_tracks,
+                failed_set_labels=failed_set_labels,
+                api_ingest_success=api_ingest_success,
+            )
+            log.info(
+                f"🤖 Evaluation complete: {result.errors} errors, {result.warnings} warnings, {result.infos} info findings"
+            )
+    except Exception as e:  # pragma: no cover
+        log.exception("Pipeline evaluation failed unexpectedly: %s", e)
 
 
 def _extract_date_and_title(file_name: str) -> tuple[str, str]:

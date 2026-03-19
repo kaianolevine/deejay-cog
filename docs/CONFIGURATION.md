@@ -30,6 +30,30 @@ This document lists every environment variable and config value used by **deejay
 
 ---
 
+### ANTHROPIC_API_KEY
+
+| | |
+|--|--|
+| **Required** | No (required for post-pipeline AI evaluation) |
+| **Description** | Anthropic API key used by `pipeline_evaluator.py` to call Claude. |
+| **Example** | `sk-antropic-...` |
+| **Source** | GitHub Actions: **secret** `ANTHROPIC_API_KEY` |
+| **Used by** | `update_deejay_set_collection.py` (Phase 3 Step 8). |
+
+---
+
+### STANDARDS_VERSION
+
+| | |
+|--|--|
+| **Required** | No (defaults to `6.0`) |
+| **Description** | Version of the standards document being evaluated against. |
+| **Example** | `6.0` |
+| **Source** | GitHub Actions: environment variable `STANDARDS_VERSION` |
+| **Used by** | `pipeline_evaluator.py` |
+
+---
+
 ### CSV_SOURCE_FOLDER_ID
 
 | | |

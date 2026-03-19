@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.76] - 2026-03-19
+
+- Added pipeline_evaluator.py — calls Claude API after each pipeline run to evaluate conformance against standards document. Posts structured findings to deejay-marvel-api. Wired into update_deejay_set_collection workflow.
+
 ## [0.0.75] - 2026-03-18
 
 - Moved API ingest step from `update_deejay_set_collection` to `process_new_files`. Now only newly processed CSVs are sent to deejay-marvel-api.
