@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.77] - 2026-03-19
+
+- "Improved Claude prompt for pipeline evaluation to enforce
+  raw JSON output. Added system prompt for better instruction
+  following."
+
 ## [0.0.76] - 2026-03-19
 
 - Added pipeline_evaluator.py — calls Claude API after each pipeline run to evaluate conformance against standards document. Posts structured findings to deejay-marvel-api. Wired into update_deejay_set_collection workflow.

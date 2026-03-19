@@ -69,7 +69,7 @@ STRUCTURAL_CONFORMANCE: Does the pipeline follow patterns?
 - Failed items were prefixed FAILED_ (PATTERN)
 - Archive, never delete (PATTERN)
 
-Respond ONLY with a JSON array of findings. Each finding:
+Return a JSON array of findings. Each finding:
 {{
   "dimension": "pipeline_consistency|structural_conformance",
   "severity": "ERROR|WARN|INFO",
@@ -78,6 +78,18 @@ Respond ONLY with a JSON array of findings. Each finding:
 }}
 
 If everything looks good, return one INFO finding confirming it.
+
+CRITICAL INSTRUCTION — YOUR ENTIRE RESPONSE:
+You must respond with ONLY a raw JSON array.
+No introduction. No explanation. No markdown. No code fences.
+Do not write ```json or ``` anywhere.
+Do not write any text before or after the array.
+Your response must start with [ and end with ].
+If you write anything other than a valid JSON array,
+the pipeline evaluation system will fail.
+
+Example of correct response format:
+[{{"dimension":"pipeline_consistency","severity":"INFO","finding":"Pipeline completed with no failures.","suggestion":null}}]
 """.strip()
 
 
@@ -177,6 +189,11 @@ def evaluate_pipeline_run(
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1000,
+            system=(
+                "You are a pipeline evaluation assistant. You respond ONLY with raw JSON arrays. "
+                "Never use markdown. Never add explanation. Your entire response is always a valid JSON "
+                "array starting with [ and ending with ]."
+            ),
             messages=[{"role": "user", "content": prompt}],
         )
         claude_text = _extract_text_from_claude_message(message)
