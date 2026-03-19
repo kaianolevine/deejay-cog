@@ -427,7 +427,7 @@ wheels = [
 
 [[package]]
 name = "deejay-set-processor"
-version = "0.0.75"
+version = "0.0.76"
 source = { editable = "." }
 dependencies = [
     { name = "kaiano" },
