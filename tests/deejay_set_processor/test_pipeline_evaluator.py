@@ -43,8 +43,14 @@ def test_csv_processing_prompt_is_csv_specific() -> None:
     assert "total_tracks: total track rows" in prompt and "(120)" in prompt
     assert "2024-01-01 Bad" in prompt
     assert "api_ingest_success: all API ingest attempts succeeded" in prompt
-    assert "unrecognized_filename_skips: files skipped due to filename format (2)" in prompt
-    assert "possible_duplicate_csv: CSVs renamed as possible_duplicate_ and not uploaded (4)" in prompt
+    assert (
+        "unrecognized_filename_skips: files skipped due to filename format (2)"
+        in prompt
+    )
+    assert (
+        "possible_duplicate_csv: CSVs renamed as possible_duplicate_ and not uploaded (4)"
+        in prompt
+    )
     assert "COLLECTION_UPDATE evaluation context" not in prompt
 
 

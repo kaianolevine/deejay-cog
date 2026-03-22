@@ -170,7 +170,6 @@ def generate_dj_set_collection():
     log.info("Completed reordering sheets")
     log.info("✅ Finished generate_dj_set_collection")
 
-
     run_id = os.environ.get("GITHUB_RUN_ID", "local-run")
     if os.environ.get("ANTHROPIC_API_KEY") and os.environ.get("KAIANO_API_BASE_URL"):
         try:

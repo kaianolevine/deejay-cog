@@ -61,6 +61,7 @@ def test_main_skips_evaluate_without_anthropic(monkeypatch) -> None:
 
     mock_eval.assert_not_called()
 
+
 # --- Normalization tests -----------------------------------------------------
 
 
