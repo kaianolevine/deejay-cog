@@ -1,6 +1,7 @@
 import contextlib
 import os
 import re
+from dataclasses import dataclass, field
 
 import kaiano.config as config
 from kaiano import logger as logger_mod
@@ -10,8 +11,25 @@ from deejay_set_processor.ingest_to_api import (
     build_ingest_payload,
     read_tracks_from_sheet,
 )
+from deejay_set_processor.pipeline_evaluator import evaluate_pipeline_run
 
 log = logger_mod.get_logger()
+
+
+@dataclass
+class CsvPipelineStats:
+    """Counters for a process_new_files run (used for AI evaluation)."""
+
+    sets_attempted: int = 0
+    sets_imported: int = 0
+    sets_failed: int = 0
+    sets_skipped_non_csv: int = 0
+    skipped_bad_filename: int = 0
+    duplicate_csv: int = 0
+    total_tracks: int = 0
+    failed_set_labels: list[str] = field(default_factory=list)
+    ingest_attempted: int = 0
+    ingest_failed: int = 0
 
 
 def normalize_prefixes_in_source(drive) -> None:
@@ -124,8 +142,12 @@ def rename_file_as_duplicate(g: GoogleAPI, file_id: str, filename: str) -> None:
         log.error(f"Failed to rename original to possible_duplicate_: {rename_exc}")
 
 
-def process_non_csv_file(g: GoogleAPI, file_metadata: dict, year: str) -> None:
-    global non_csv_count
+def process_non_csv_file(
+    g: GoogleAPI,
+    file_metadata: dict,
+    year: str,
+    stats: CsvPipelineStats | None = None,
+) -> None:
     filename = file_metadata["name"]
     file_id = file_metadata["id"]
     log.info(f"\n📄 Moving non-CSV file that starts with year: {filename}")
@@ -134,7 +156,8 @@ def process_non_csv_file(g: GoogleAPI, file_metadata: dict, year: str) -> None:
         base_name = os.path.splitext(filename)[0]
         if file_exists_with_base_name(g, year_folder_id, base_name):
             rename_file_as_duplicate(g, file_id, filename)
-            non_csv_count += 1
+            if stats is not None:
+                stats.sets_skipped_non_csv += 1
             return
 
         g.drive.move_file(
@@ -142,12 +165,19 @@ def process_non_csv_file(g: GoogleAPI, file_metadata: dict, year: str) -> None:
         )
         log.info(f"📦 Moved original file to {year} subfolder: {filename}")
         remove_summary_file_for_year(g, year)
-        non_csv_count += 1
+        if stats is not None:
+            stats.sets_skipped_non_csv += 1
     except Exception as e:
         log.error(f"Failed to move non-CSV file {filename}: {e}")
 
 
-def process_csv_file(g: GoogleAPI, file_metadata: dict, year: str) -> None:
+def process_csv_file(
+    g: GoogleAPI,
+    file_metadata: dict,
+    year: str,
+    stats: CsvPipelineStats | None = None,
+) -> str:
+    """Process one CSV. Returns imported | failed | duplicate."""
     filename = file_metadata["name"]
     file_id = file_metadata["id"]
     log.info(f"\n🚧 Processing: {filename}")
@@ -165,7 +195,9 @@ def process_csv_file(g: GoogleAPI, file_metadata: dict, year: str) -> None:
                 f"⚠️ Destination already contains file with base name '{base_name}' in year folder {year_folder_id}. Marking original as possible duplicate and skipping."
             )
             rename_file_as_duplicate(g, file_id, filename)
-            return
+            if stats is not None:
+                stats.duplicate_csv += 1
+            return "duplicate"
 
         sheet_id = g.drive.upload_csv_as_google_sheet(
             temp_path, parent_id=year_folder_id
@@ -173,6 +205,16 @@ def process_csv_file(g: GoogleAPI, file_metadata: dict, year: str) -> None:
         log.debug(f"Uploaded sheet ID: {sheet_id}")
         g.sheets.formatter.apply_formatting_to_sheet(sheet_id)
         remove_summary_file_for_year(g, year)
+
+        if stats is not None:
+            stats.sets_imported += 1
+            try:
+                tracks = read_tracks_from_sheet(g, sheet_id)
+                stats.total_tracks += len(tracks or [])
+            except Exception as track_exc:
+                log.warning(
+                    "Could not read tracks from new sheet for stats: %s", track_exc
+                )
 
         try:
             archive_folder_id = g.drive.ensure_folder(year_folder_id, "Archive")
@@ -190,6 +232,7 @@ def process_csv_file(g: GoogleAPI, file_metadata: dict, year: str) -> None:
                     venue=venue,
                     label=base_name,
                     g=g,
+                    stats=stats,
                 )
             else:
                 log.warning(
@@ -199,14 +242,20 @@ def process_csv_file(g: GoogleAPI, file_metadata: dict, year: str) -> None:
         except Exception as move_exc:
             log.error(f"Failed to move original file to Archive subfolder: {move_exc}")
 
+        return "imported"
+
     except Exception as e:
         log.error(f"❌ Failed to upload or format {filename}: {e}")
         try:
             failed_name = f"FAILED_{filename}"
             g.drive.rename_file(file_id, failed_name)
             log.info(f"✏️ Renamed original to '{failed_name}'")
+            if stats is not None:
+                stats.sets_failed += 1
+                stats.failed_set_labels.append(os.path.splitext(filename)[0])
         except Exception as rename_exc:
             log.error(f"Failed to rename original to FAILED_: {rename_exc}")
+        return "failed"
     finally:
         if os.path.exists(temp_path):
             with contextlib.suppress(Exception):
@@ -241,6 +290,7 @@ def _ingest_set_to_api(
     venue: str,
     label: str,
     g: GoogleAPI,
+    stats: CsvPipelineStats | None = None,
 ) -> None:
     """
     Send a single newly processed set to deejay-marvel-api.
@@ -273,12 +323,18 @@ def _ingest_set_to_api(
             log.warning("⚠️ No tracks to ingest for %s", label)
             return
 
+        if stats is not None:
+            stats.ingest_attempted += 1
         client = KaianoApiClient.from_env()
         client.post("/v1/ingest", payload)
         log.info("✅ Ingested to API: %s (%d tracks)", label, len(final_tracks))
     except KaianoApiError as e:
+        if stats is not None:
+            stats.ingest_failed += 1
         log.error("❌ API ingest failed for %s: %s", label, e)
     except Exception as e:
+        if stats is not None and stats.ingest_attempted > 0:
+            stats.ingest_failed += 1
         log.error("❌ Unexpected error during API ingest for %s: %s", label, e)
 
 
@@ -337,10 +393,7 @@ def main():
     files = [{"id": f.id, "name": f.name} for f in files]
     log.info(f"Found {len(files)} files in source folder")
 
-    global csv_count, non_csv_count, skipped_count
-    csv_count = 0
-    non_csv_count = 0
-    skipped_count = 0
+    stats = CsvPipelineStats()
 
     for file_metadata in files:
         filename = file_metadata["name"]
@@ -349,21 +402,46 @@ def main():
         year = _extract_year_from_filename(filename)
         if not year:
             log.warning(f"⚠️ Skipping unrecognized filename format: {filename}")
-            skipped_count += 1
+            stats.skipped_bad_filename += 1
             continue
 
         # If the file is not a CSV but starts with a year, move it straight to the year folder
         if not filename.lower().endswith(".csv"):
-            process_non_csv_file(g, file_metadata, year)
+            process_non_csv_file(g, file_metadata, year, stats)
             continue
 
         # At this point we only process CSVs
-        csv_count += 1
-        process_csv_file(g, file_metadata, year)
+        stats.sets_attempted += 1
+        process_csv_file(g, file_metadata, year, stats)
 
     log.info(
-        f"✅ Done: {csv_count} CSVs, {non_csv_count} non-CSV files, {skipped_count} skipped."
+        "✅ Done: %d CSVs, %d non-CSV files, %d skipped.",
+        stats.sets_attempted,
+        stats.sets_skipped_non_csv,
+        stats.skipped_bad_filename,
     )
+
+    if os.environ.get("ANTHROPIC_API_KEY") and os.environ.get("KAIANO_API_BASE_URL"):
+        run_id = os.environ.get("GITHUB_RUN_ID", "local-run")
+        try:
+            evaluate_pipeline_run(
+                run_id=run_id,
+                repo="deejay-set-processor-dev",
+                sets_imported=stats.sets_imported,
+                sets_failed=stats.sets_failed,
+                sets_skipped=stats.sets_skipped_non_csv,
+                total_tracks=stats.total_tracks,
+                failed_set_labels=list(stats.failed_set_labels),
+                api_ingest_success=(stats.ingest_failed == 0),
+                sets_attempted=stats.sets_attempted,
+                collection_update=False,
+                unrecognized_filename_skips=stats.skipped_bad_filename,
+                duplicate_csv_count=stats.duplicate_csv,
+            )
+        except Exception:
+            log.exception(
+                "Pipeline evaluation raised unexpectedly (should be best-effort)"
+            )
 
 
 if __name__ == "__main__":

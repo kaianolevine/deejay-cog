@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.79] - 2026-03-22
+
+- Fixed AI evaluation context in `update_deejay_set_collection` — it was reading env vars that were never set, always defaulting to 0.
+- Moved CSV processing evaluation to `process_new_files.py` with real run counts (imported, failed, skipped, tracks, API ingest, duplicates).
+- Collection update runs now use `collection_update=True` with a collection-specific Claude prompt and an INFO success finding on `pipeline_consistency`.
+- Wired `ANTHROPIC_API_KEY` and `STANDARDS_VERSION` into the process-new-CSV workflow.
+
 ## [0.0.78] - 2026-03-19
 
 - "Fixed false ERROR finding when no new sets were available

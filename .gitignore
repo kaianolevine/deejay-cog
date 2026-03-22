@@ -39,3 +39,4 @@ venv.bak/
 
 # macOS
 .DS_Store
+credentials.json

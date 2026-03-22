@@ -1,42 +1,73 @@
+"""Best-effort Claude evaluation of pipeline runs; posts findings to deejay-marvel-api."""
+
 from __future__ import annotations
 
-import dataclasses
 import json
 import os
+import re
+from datetime import UTC, datetime
 from typing import Any
 
-try:
-    from anthropic import Anthropic  # type: ignore
-except Exception:  # pragma: no cover
-    Anthropic = None  # type: ignore[assignment]
+from kaiano import logger as logger_mod
 
-try:
-    from kaiano.api import KaianoApiClient  # type: ignore
-except Exception:  # pragma: no cover
-    KaianoApiClient = None  # type: ignore[assignment]
+log = logger_mod.get_logger()
 
-try:
-    from kaiano import logger as logger_mod  # type: ignore
-
-    log = logger_mod.get_logger()
-except Exception:  # pragma: no cover
-    import logging
-
-    log = logging.getLogger(__name__)
+_JSON_FENCE = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.IGNORECASE)
 
 
-@dataclasses.dataclass
-class EvaluationResult:
-    findings_posted: int
-    errors: int
-    warnings: int
-    infos: int
-    evaluator_failed: bool = False
+def _anthropic_messages_create(
+    *,
+    api_key: str,
+    model: str,
+    max_tokens: int,
+    user_prompt: str,
+) -> str:
+    import httpx
+
+    url = "https://api.anthropic.com/v1/messages"
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    body: dict[str, Any] = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": user_prompt}],
+    }
+    with httpx.Client(timeout=120.0) as client:
+        r = client.post(url, headers=headers, json=body)
+        r.raise_for_status()
+        data = r.json()
+    blocks = data.get("content") or []
+    parts: list[str] = []
+    for b in blocks:
+        if isinstance(b, dict) and b.get("type") == "text":
+            parts.append(str(b.get("text", "")))
+    return "".join(parts).strip()
 
 
-def _build_claude_prompt(
+def _parse_findings_json(text: str) -> list[dict[str, Any]]:
+    raw = text.strip()
+    m = _JSON_FENCE.search(raw)
+    if m:
+        raw = m.group(1).strip()
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(parsed, dict) and "findings" in parsed:
+        inner = parsed["findings"]
+        return inner if isinstance(inner, list) else []
+    if isinstance(parsed, list):
+        return parsed
+    return []
+
+
+def _build_prompt_csv(
     *,
     run_id: str,
+    standards_version: str,
     sets_imported: int,
     sets_failed: int,
     sets_skipped: int,
@@ -44,106 +75,58 @@ def _build_claude_prompt(
     failed_set_labels: list[str],
     api_ingest_success: bool,
     sets_attempted: int,
+    unrecognized_filename_skips: int,
+    duplicate_csv_count: int,
 ) -> str:
-    failed = failed_set_labels or ["none"]
+    failed_labels = ", ".join(failed_set_labels) if failed_set_labels else "(none)"
+    return f"""You are evaluating a DJ set CSV processing pipeline run against engineering standards v{standards_version}.
 
-    # Keep rubric text explicit and parse-friendly for Claude.
-    return f"""
-Repo: deejay-set-processor-dev
-Run ID: {run_id}
-Sets imported: {sets_imported}
-Sets failed: {sets_failed}
-Sets skipped: {sets_skipped}
-Tracks imported: {total_tracks}
-Failed sets: {", ".join(failed) or "none"}
-API ingest attempted: {sets_attempted > 0}
-API ingest succeeded: {api_ingest_success}
-New sets sent to API: {sets_attempted}
+CSV PROCESSING evaluation context:
+- GitHub Actions run_id: {run_id}
+- sets_attempted: CSV files encountered for processing ({sets_attempted})
+- sets_imported: successfully processed CSVs (uploaded as Google Sheet, moved to archive) ({sets_imported})
+- sets_failed: CSVs renamed with FAILED_ prefix ({sets_failed})
+- sets_skipped: non-CSV files moved out of the source folder ({sets_skipped})
+- unrecognized_filename_skips: files skipped due to filename format ({unrecognized_filename_skips})
+- possible_duplicate_csv: CSVs renamed as possible_duplicate_ and not uploaded ({duplicate_csv_count})
+- total_tracks: total track rows across successfully processed sets ({total_tracks})
+- failed_set_labels: {failed_labels}
+- api_ingest_success: all API ingest attempts succeeded, or none were required ({api_ingest_success})
 
-Evaluate this pipeline run against these standards:
+Respond with ONLY valid JSON (no markdown) in this exact shape:
+{{"findings":[{{"dimension":"pipeline_consistency","severity":"INFO|WARN|ERROR","finding":"...","suggestion":""}}]}}
 
-PIPELINE_CONSISTENCY:
-- If API ingest was attempted (new sets existed) and failed:
-  severity ERROR
-- If no new sets existed (nothing to ingest): severity INFO,
-  note that this is expected behavior when collection is
-  already up to date
-- If API ingest was attempted and succeeded: severity INFO
-
-STRUCTURAL_CONFORMANCE: Does the pipeline follow patterns?
-- Pipeline continued on per-item failures (PRINCIPLE)
-- Failed items were prefixed FAILED_ (PATTERN)
-- Archive, never delete (PATTERN)
-
-Return a JSON array of findings. Each finding:
-{{
-  "dimension": "pipeline_consistency|structural_conformance",
-  "severity": "ERROR|WARN|INFO",
-  "finding": "One sentence describing what was observed.",
-  "suggestion": "One sentence concrete remediation or null."
-}}
-
-If everything looks good, return one INFO finding confirming it.
-
-CRITICAL INSTRUCTION — YOUR ENTIRE RESPONSE:
-You must respond with ONLY a raw JSON array.
-No introduction. No explanation. No markdown. No code fences.
-Do not write ```json or ``` anywhere.
-Do not write any text before or after the array.
-Your response must start with [ and end with ].
-If you write anything other than a valid JSON array,
-the pipeline evaluation system will fail.
-
-Example of correct response format:
-[{{"dimension":"pipeline_consistency","severity":"INFO","finding":"Pipeline completed with no failures.","suggestion":null}}]
-""".strip()
+Rules:
+- severity must be INFO, WARN, or ERROR (uppercase).
+- dimension should be pipeline_consistency unless a different dimension is clearly justified.
+- Cover gaps between counts (e.g. attempted vs imported vs failed vs duplicates).
+- If api_ingest_success is false, include at least one WARN or ERROR about API ingest.
+"""
 
 
-def _extract_text_from_claude_message(message: Any) -> str:
-    # Anthropic SDK typically returns: message.content = [ContentBlock(text=...)]
-    content = getattr(message, "content", None)
-    if isinstance(content, list) and content:
-        first = content[0]
-        text = getattr(first, "text", None)
-        if text:
-            return str(text)
-    return str(message)
+def _build_prompt_collection(*, run_id: str, standards_version: str) -> str:
+    return f"""You are evaluating a DJ set COLLECTION UPDATE pipeline run against engineering standards v{standards_version}.
 
+COLLECTION_UPDATE evaluation context:
+- This run rebuilt the master DJ set collection spreadsheet and JSON snapshot.
+- No CSV processing happened in this run.
+- The Python job reached the evaluation step without raising an uncaught exception (treat as successful completion of the collection job unless counts or context imply otherwise).
+- GitHub Actions run_id: {run_id}
 
-def _parse_findings_from_claude(text: str) -> tuple[list[dict[str, Any]], bool]:
-    """
-    Returns (findings, evaluator_failed_flag).
-    """
-    try:
-        parsed = json.loads(text)
-        if not isinstance(parsed, list):
-            raise ValueError("Claude response was not a JSON array.")
+Evaluate: did the collection update complete successfully?
+- Dimension: pipeline_consistency
+- If collection_update=True and there are no failures implied: emit an INFO finding confirming the collection was updated successfully.
 
-        # Minimal shape validation.
-        for item in parsed:
-            if not isinstance(item, dict):
-                raise ValueError("Finding items must be objects.")
-            if (
-                "dimension" not in item
-                or "severity" not in item
-                or "finding" not in item
-            ):
-                raise ValueError("Finding missing required fields.")
+Respond with ONLY valid JSON (no markdown) in this exact shape:
+{{"findings":[{{"dimension":"pipeline_consistency","severity":"INFO|WARN|ERROR","finding":"...","suggestion":""}}]}}
 
-        return parsed, False
-    except Exception as e:
-        log.error("Failed to parse Claude response as JSON: %s", e)
-        return [
-            {
-                "dimension": "pipeline_consistency",
-                "severity": "WARN",
-                "finding": "Evaluator failed to parse Claude response; returning a warning-only result.",
-                "suggestion": None,
-            }
-        ], True
+Rules:
+- severity must be INFO, WARN, or ERROR (uppercase).
+"""
 
 
 def evaluate_pipeline_run(
+    *,
     run_id: str,
     repo: str,
     sets_imported: int,
@@ -153,29 +136,128 @@ def evaluate_pipeline_run(
     failed_set_labels: list[str],
     api_ingest_success: bool,
     sets_attempted: int = 0,
-) -> EvaluationResult:
+    collection_update: bool = False,
+    unrecognized_filename_skips: int = 0,
+    duplicate_csv_count: int = 0,
+) -> None:
     """
-    Call Claude to evaluate this pipeline run against the standards.
-    Post findings to deejay-marvel-api.
+    Call Claude, then POST each finding to KAIANO_API_BASE_URL /v1/evaluations.
+    Never raises — logs and returns on any failure.
     """
-    standards_version = (os.getenv("STANDARDS_VERSION") or "6.0").strip()
-    api_base_url = (os.getenv("KAIANO_API_BASE_URL") or "").strip()
-    owner_id = (os.getenv("KAIANO_API_OWNER_ID") or "dev-owner").strip()
-    anthropic_api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    if not os.environ.get("ANTHROPIC_API_KEY") or not os.environ.get(
+        "KAIANO_API_BASE_URL"
+    ):
+        return
 
-    if not anthropic_api_key:
-        log.warning("ANTHROPIC_API_KEY missing; skipping evaluation.")
-        return EvaluationResult(
-            findings_posted=0, errors=0, warnings=0, infos=0, evaluator_failed=True
-        )
-    if not api_base_url:
-        log.warning("KAIANO_API_BASE_URL missing; skipping evaluation.")
-        return EvaluationResult(
-            findings_posted=0, errors=0, warnings=0, infos=0, evaluator_failed=True
-        )
+    standards_version = os.environ.get("STANDARDS_VERSION", "6.0")
+    model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
-    prompt = _build_claude_prompt(
+    try:
+        if collection_update:
+            user_prompt = _build_prompt_collection(
+                run_id=run_id, standards_version=standards_version
+            )
+        else:
+            user_prompt = _build_prompt_csv(
+                run_id=run_id,
+                standards_version=standards_version,
+                sets_imported=sets_imported,
+                sets_failed=sets_failed,
+                sets_skipped=sets_skipped,
+                total_tracks=total_tracks,
+                failed_set_labels=failed_set_labels,
+                api_ingest_success=api_ingest_success,
+                sets_attempted=sets_attempted,
+                unrecognized_filename_skips=unrecognized_filename_skips,
+                duplicate_csv_count=duplicate_csv_count,
+            )
+
+        text = _anthropic_messages_create(
+            api_key=os.environ["ANTHROPIC_API_KEY"],
+            model=model,
+            max_tokens=4096,
+            user_prompt=user_prompt,
+        )
+        findings = _parse_findings_json(text)
+    except Exception:
+        log.exception("pipeline evaluation: Claude request or parse failed")
+        return
+
+    err_ct = warn_ct = info_ct = 0
+    evaluated_at = datetime.now(UTC).isoformat()
+
+    try:
+        from kaiano.api import KaianoApiClient  # type: ignore[attr-defined]
+        from kaiano.api.errors import KaianoApiError  # type: ignore[attr-defined]
+    except Exception:
+        log.exception("pipeline evaluation: Kaiano API client not available")
+        return
+
+    client = KaianoApiClient.from_env()
+
+    for item in findings:
+        if not isinstance(item, dict):
+            continue
+        dimension = str(item.get("dimension") or "pipeline_consistency")
+        sev = str(item.get("severity") or "INFO").upper()
+        if sev == "WARNING":
+            sev = "WARN"
+        if sev == "ERROR":
+            err_ct += 1
+        elif sev == "WARN":
+            warn_ct += 1
+        else:
+            sev = "INFO"
+            info_ct += 1
+        finding = str(item.get("finding") or "")
+        suggestion = str(item.get("suggestion") or "")
+        details = {
+            "run_id": run_id,
+            "finding": finding,
+            "suggestion": suggestion or None,
+            "standards_version": standards_version,
+            "evaluated_at": evaluated_at,
+            "collection_update": collection_update,
+        }
+        payload = {
+            "repo": repo,
+            "dimension": dimension,
+            "severity": sev,
+            "details": details,
+        }
+        try:
+            client.post("/v1/evaluations", payload)
+        except KaianoApiError as e:
+            log.warning("pipeline evaluation: failed to POST finding: %s", e)
+        except Exception:
+            log.exception("pipeline evaluation: unexpected error posting finding")
+
+    log.info(
+        "🤖 Evaluation complete: %d errors, %d warnings, %d info findings",
+        err_ct,
+        warn_ct,
+        info_ct,
+    )
+
+
+def build_csv_evaluation_prompt(
+    *,
+    run_id: str,
+    standards_version: str,
+    sets_imported: int,
+    sets_failed: int,
+    sets_skipped: int,
+    total_tracks: int,
+    failed_set_labels: list[str],
+    api_ingest_success: bool,
+    sets_attempted: int,
+    unrecognized_filename_skips: int = 0,
+    duplicate_csv_count: int = 0,
+) -> str:
+    """Exposed for tests (same body as internal CSV prompt)."""
+    return _build_prompt_csv(
         run_id=run_id,
+        standards_version=standards_version,
         sets_imported=sets_imported,
         sets_failed=sets_failed,
         sets_skipped=sets_skipped,
@@ -183,82 +265,11 @@ def evaluate_pipeline_run(
         failed_set_labels=failed_set_labels,
         api_ingest_success=api_ingest_success,
         sets_attempted=sets_attempted,
+        unrecognized_filename_skips=unrecognized_filename_skips,
+        duplicate_csv_count=duplicate_csv_count,
     )
 
-    evaluator_failed = False
-    findings: list[dict[str, Any]]
 
-    # --- Calling Claude -------------------------------------------------------
-    try:
-        if Anthropic is None:  # pragma: no cover
-            raise RuntimeError("Anthropic SDK not available.")
-
-        client = Anthropic()
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1000,
-            system=(
-                "You are a pipeline evaluation assistant. You respond ONLY with raw JSON arrays. "
-                "Never use markdown. Never add explanation. Your entire response is always a valid JSON "
-                "array starting with [ and ending with ]."
-            ),
-            messages=[{"role": "user", "content": prompt}],
-        )
-        claude_text = _extract_text_from_claude_message(message)
-        findings, evaluator_failed = _parse_findings_from_claude(claude_text)
-    except Exception as e:  # pragma: no cover
-        log.error("Claude evaluation call failed: %s", e)
-        evaluator_failed = True
-        findings = [
-            {
-                "dimension": "pipeline_consistency",
-                "severity": "WARN",
-                "finding": "Evaluator failed during Claude call; returning a warning-only result.",
-                "suggestion": None,
-            }
-        ]
-
-    # --- Counting findings ----------------------------------------------------
-    errors = sum(1 for f in findings if f.get("severity") == "ERROR")
-    warnings = sum(1 for f in findings if f.get("severity") == "WARN")
-    infos = sum(1 for f in findings if f.get("severity") == "INFO")
-
-    # --- Posting findings -----------------------------------------------------
-    if KaianoApiClient is None:  # pragma: no cover
-        log.error("KaianoApiClient not available; cannot post findings.")
-        return EvaluationResult(
-            findings_posted=0,
-            errors=errors,
-            warnings=warnings,
-            infos=infos,
-            evaluator_failed=True,
-        )
-
-    api_client = KaianoApiClient(base_url=api_base_url, owner_id=owner_id)
-
-    findings_posted = 0
-    for f in findings:
-        payload = {
-            "run_id": run_id,
-            "repo": repo,
-            "dimension": f.get("dimension"),
-            "severity": f.get("severity"),
-            "finding": f.get("finding"),
-            "suggestion": f.get("suggestion"),
-            "standards_version": standards_version,
-        }
-        try:
-            api_client.post("/v1/evaluations", payload)
-            findings_posted += 1
-        except Exception as e:
-            # Evaluation failures must never abort the pipeline.
-            log.error("Failed to post evaluation finding: %s", e)
-            evaluator_failed = True
-
-    return EvaluationResult(
-        findings_posted=findings_posted,
-        errors=errors,
-        warnings=warnings,
-        infos=infos,
-        evaluator_failed=evaluator_failed,
-    )
+def build_collection_evaluation_prompt(*, run_id: str, standards_version: str) -> str:
+    """Exposed for tests (same body as internal collection prompt)."""
+    return _build_prompt_collection(run_id=run_id, standards_version=standards_version)

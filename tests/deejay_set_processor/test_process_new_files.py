@@ -5,6 +5,62 @@ from unittest.mock import MagicMock, patch
 
 import deejay_set_processor.process_new_files as process_new_files
 
+
+def test_main_calls_evaluate_when_llm_and_api_configured(monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic")
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    monkeypatch.setenv("GITHUB_RUN_ID", "42")
+
+    fake_file = SimpleNamespace(id="f1", name="2024-01-02_My Venue.csv")
+    drive = SimpleNamespace(list_files=MagicMock(return_value=[fake_file]))
+    g = SimpleNamespace(drive=drive)
+
+    def _fake_process_csv(g_api, meta, year, stats):
+        stats.sets_imported += 1
+        stats.total_tracks += 11
+        return "imported"
+
+    with (
+        patch.object(process_new_files.GoogleAPI, "from_env", return_value=g),
+        patch.object(process_new_files, "normalize_prefixes_in_source"),
+        patch.object(
+            process_new_files,
+            "process_csv_file",
+            side_effect=_fake_process_csv,
+        ),
+        patch.object(process_new_files, "evaluate_pipeline_run") as mock_eval,
+        patch.object(process_new_files, "config") as mock_cfg,
+    ):
+        mock_cfg.CSV_SOURCE_FOLDER_ID = "src-folder"
+        process_new_files.main()
+
+    mock_eval.assert_called_once()
+    kw = mock_eval.call_args.kwargs
+    assert kw["run_id"] == "42"
+    assert kw["sets_attempted"] == 1
+    assert kw["sets_imported"] == 1
+    assert kw["total_tracks"] == 11
+    assert kw["collection_update"] is False
+
+
+def test_main_skips_evaluate_without_anthropic(monkeypatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+
+    drive = SimpleNamespace(list_files=MagicMock(return_value=[]))
+    g = SimpleNamespace(drive=drive)
+
+    with (
+        patch.object(process_new_files.GoogleAPI, "from_env", return_value=g),
+        patch.object(process_new_files, "normalize_prefixes_in_source"),
+        patch.object(process_new_files, "evaluate_pipeline_run") as mock_eval,
+        patch.object(process_new_files, "config") as mock_cfg,
+    ):
+        mock_cfg.CSV_SOURCE_FOLDER_ID = "src-folder"
+        process_new_files.main()
+
+    mock_eval.assert_not_called()
+
 # --- Normalization tests -----------------------------------------------------
 
 

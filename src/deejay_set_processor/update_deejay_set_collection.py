@@ -1,5 +1,3 @@
-import datetime as dt
-import json
 import os
 import re
 
@@ -172,57 +170,26 @@ def generate_dj_set_collection():
     log.info("Completed reordering sheets")
     log.info("✅ Finished generate_dj_set_collection")
 
-    # Phase 3 Step 8: post-pipeline AI evaluation (best-effort; never fails the pipeline).
-    try:
-        anthropic_api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
-        api_base_url = (os.getenv("KAIANO_API_BASE_URL") or "").strip()
-        if not anthropic_api_key:
-            log.warning("ANTHROPIC_API_KEY not set — skipping pipeline evaluation.")
-        elif not api_base_url:
-            log.warning("KAIANO_API_BASE_URL not set — skipping pipeline evaluation.")
-        else:
-            run_id = os.getenv("GITHUB_RUN_ID") or dt.datetime.now(dt.UTC).isoformat()
-            sets_imported = int(os.getenv("SETS_IMPORTED") or "0")
-            sets_failed = int(os.getenv("SETS_FAILED") or "0")
-            sets_skipped = int(os.getenv("SETS_SKIPPED") or "0")
-            total_tracks = int(os.getenv("TOTAL_TRACKS") or "0")
 
-            failed_set_labels_raw = (os.getenv("FAILED_SET_LABELS") or "").strip()
-            failed_set_labels: list[str] = []
-            if failed_set_labels_raw:
-                try:
-                    parsed = json.loads(failed_set_labels_raw)
-                    if isinstance(parsed, list):
-                        failed_set_labels = [str(x) for x in parsed]
-                except Exception:
-                    failed_set_labels = [
-                        s.strip() for s in failed_set_labels_raw.split(",") if s.strip()
-                    ]
-
-            # If no sets existed for ingest, treat this as a successful no-op.
-            # Only mark API ingest as failed when an ingest attempt actually
-            # occurred and at least one set failed.
-            sets_attempted = sets_imported + sets_failed + sets_skipped
-            api_ingest_success = True
-            if sets_attempted > 0:
-                api_ingest_success = sets_failed == 0
-
-            result = evaluate_pipeline_run(
+    run_id = os.environ.get("GITHUB_RUN_ID", "local-run")
+    if os.environ.get("ANTHROPIC_API_KEY") and os.environ.get("KAIANO_API_BASE_URL"):
+        try:
+            evaluate_pipeline_run(
                 run_id=run_id,
                 repo="deejay-set-processor-dev",
-                sets_imported=sets_imported,
-                sets_failed=sets_failed,
-                sets_skipped=sets_skipped,
-                total_tracks=total_tracks,
-                failed_set_labels=failed_set_labels,
-                api_ingest_success=api_ingest_success,
-                sets_attempted=sets_attempted,
+                sets_imported=0,
+                sets_failed=0,
+                sets_skipped=0,
+                total_tracks=0,
+                failed_set_labels=[],
+                api_ingest_success=True,
+                sets_attempted=0,
+                collection_update=True,
             )
-            log.info(
-                f"🤖 Evaluation complete: {result.errors} errors, {result.warnings} warnings, {result.infos} info findings"
+        except Exception:
+            log.exception(
+                "Collection pipeline evaluation raised unexpectedly (should be best-effort)"
             )
-    except Exception as e:  # pragma: no cover
-        log.exception("Pipeline evaluation failed unexpectedly: %s", e)
 
 
 def _extract_date_and_title(file_name: str) -> tuple[str, str]:

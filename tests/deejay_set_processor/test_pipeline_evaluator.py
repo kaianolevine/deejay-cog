@@ -2,213 +2,72 @@ import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from deejay_set_processor.pipeline_evaluator import evaluate_pipeline_run
+import deejay_set_processor.pipeline_evaluator as pe
+from deejay_set_processor.pipeline_evaluator import (
+    build_collection_evaluation_prompt,
+    build_csv_evaluation_prompt,
+    evaluate_pipeline_run,
+)
 
 
-def _fake_claude_message(text: str):
-    return SimpleNamespace(content=[SimpleNamespace(text=text)])
-
-
-def test_prompt_is_built_from_run_context(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test")
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://example.test")
-    monkeypatch.setenv("KAIANO_API_OWNER_ID", "owner-123")
-    monkeypatch.setenv("STANDARDS_VERSION", "6.0")
-
-    posted = MagicMock()
-
-    api_client = SimpleNamespace(post=posted)
-    claude_client = SimpleNamespace(
-        messages=SimpleNamespace(
-            create=MagicMock(
-                return_value=_fake_claude_message(
-                    json.dumps(
-                        [
-                            {
-                                "dimension": "pipeline_consistency",
-                                "severity": "INFO",
-                                "finding": "All checks passed.",
-                                "suggestion": None,
-                            }
-                        ]
-                    )
-                )
-            )
-        )
+def test_collection_update_prompt_is_collection_specific() -> None:
+    prompt = build_collection_evaluation_prompt(
+        run_id="23312071243",
+        standards_version="6.0",
     )
+    assert "COLLECTION_UPDATE evaluation context" in prompt
+    assert "No CSV processing happened in this run" in prompt
+    assert "pipeline_consistency" in prompt
+    assert "23312071243" in prompt
+
+
+def test_csv_processing_prompt_is_csv_specific() -> None:
+    prompt = build_csv_evaluation_prompt(
+        run_id="run-abc",
+        standards_version="6.0",
+        sets_imported=2,
+        sets_failed=1,
+        sets_skipped=3,
+        total_tracks=120,
+        failed_set_labels=["2024-01-01 Bad", "2024-02-02 Worse"],
+        api_ingest_success=False,
+        sets_attempted=5,
+        unrecognized_filename_skips=2,
+        duplicate_csv_count=4,
+    )
+    assert "CSV PROCESSING evaluation context" in prompt
+    assert "run-abc" in prompt
+    assert "sets_imported: successfully processed CSVs" in prompt and "(2)" in prompt
+    assert "sets_failed: CSVs renamed with FAILED_ prefix (1)" in prompt
+    assert "sets_skipped: non-CSV files moved out of the source folder (3)" in prompt
+    assert "total_tracks: total track rows" in prompt and "(120)" in prompt
+    assert "2024-01-01 Bad" in prompt
+    assert "api_ingest_success: all API ingest attempts succeeded" in prompt
+    assert "unrecognized_filename_skips: files skipped due to filename format (2)" in prompt
+    assert "possible_duplicate_csv: CSVs renamed as possible_duplicate_ and not uploaded (4)" in prompt
+    assert "COLLECTION_UPDATE evaluation context" not in prompt
+
+
+def test_evaluate_pipeline_run_uses_csv_prompt_when_collection_update_false(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://x")
+    prompts: list[str] = []
+
+    def _capture(**kw: object) -> str:
+        prompts.append(str(kw["user_prompt"]))
+        return '{"findings":[]}'
+
+    api = SimpleNamespace(post=MagicMock(return_value={}))
 
     with (
-        patch(
-            "deejay_set_processor.pipeline_evaluator.Anthropic",
-            return_value=claude_client,
-        ),
-        patch(
-            "deejay_set_processor.pipeline_evaluator.KaianoApiClient",
-            return_value=api_client,
-        ),
+        patch.object(pe, "_anthropic_messages_create", side_effect=_capture),
+        patch("kaiano.api.KaianoApiClient") as m_client,
     ):
-        result = evaluate_pipeline_run(
-            run_id="run-123",
-            repo="deejay-set-processor-dev",
-            sets_imported=10,
-            sets_failed=0,
-            sets_skipped=2,
-            total_tracks=25,
-            failed_set_labels=[],
-            api_ingest_success=True,
-            sets_attempted=12,
-        )
-
-    prompt = claude_client.messages.create.call_args.kwargs["messages"][0]["content"]
-    assert "Run ID: run-123" in prompt
-    assert "Sets imported: 10" in prompt
-    assert "Sets failed: 0" in prompt
-    assert "Sets skipped: 2" in prompt
-    assert "Tracks imported: 25" in prompt
-    assert "Failed sets: none" in prompt
-    assert "API ingest attempted: True" in prompt
-    assert "API ingest succeeded: True" in prompt
-    assert "New sets sent to API: 12" in prompt
-    assert "If no new sets existed (nothing to ingest)" in prompt
-    assert "expected behavior when collection is\n  already up to date" in prompt
-    assert result.infos == 1
-
-
-def test_claude_json_response_is_parsed_and_posted(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test")
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://example.test")
-    monkeypatch.setenv("KAIANO_API_OWNER_ID", "owner-123")
-    monkeypatch.setenv("STANDARDS_VERSION", "6.0")
-
-    findings = [
-        {
-            "dimension": "structural_conformance",
-            "severity": "WARN",
-            "finding": "Some failures may not be prefixed correctly.",
-            "suggestion": "Verify failed items are renamed with FAILED_ prefix before re-processing.",
-        }
-    ]
-    posted_payloads: list[dict] = []
-
-    def _post(_path, payload):
-        posted_payloads.append(payload)
-        return {"ok": True}
-
-    api_client = SimpleNamespace(post=MagicMock(side_effect=_post))
-
-    claude_client = SimpleNamespace(
-        messages=SimpleNamespace(
-            create=MagicMock(return_value=_fake_claude_message(json.dumps(findings)))
-        )
-    )
-
-    with (
-        patch(
-            "deejay_set_processor.pipeline_evaluator.Anthropic",
-            return_value=claude_client,
-        ),
-        patch(
-            "deejay_set_processor.pipeline_evaluator.KaianoApiClient",
-            return_value=api_client,
-        ),
-    ):
-        result = evaluate_pipeline_run(
-            run_id="run-abc",
-            repo="deejay-set-processor-dev",
-            sets_imported=1,
-            sets_failed=1,
-            sets_skipped=0,
-            total_tracks=2,
-            failed_set_labels=["FAILED_x.csv"],
-            api_ingest_success=True,
-        )
-
-    assert result.warnings == 1
-    assert result.findings_posted == 1
-    assert posted_payloads[0]["run_id"] == "run-abc"
-    assert posted_payloads[0]["repo"] == "deejay-set-processor-dev"
-    assert posted_payloads[0]["dimension"] == "structural_conformance"
-    assert posted_payloads[0]["severity"] == "WARN"
-    assert posted_payloads[0]["finding"]
-    assert posted_payloads[0]["suggestion"]
-    assert posted_payloads[0]["standards_version"] == "6.0"
-
-
-def test_malformed_claude_response_returns_single_warn(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test")
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://example.test")
-
-    api_client = SimpleNamespace(post=MagicMock(return_value={"ok": True}))
-    claude_client = SimpleNamespace(
-        messages=SimpleNamespace(
-            create=MagicMock(return_value=_fake_claude_message("not json"))
-        )
-    )
-
-    with (
-        patch(
-            "deejay_set_processor.pipeline_evaluator.Anthropic",
-            return_value=claude_client,
-        ),
-        patch(
-            "deejay_set_processor.pipeline_evaluator.KaianoApiClient",
-            return_value=api_client,
-        ),
-    ):
-        result = evaluate_pipeline_run(
-            run_id="run-malformed",
-            repo="deejay-set-processor-dev",
-            sets_imported=0,
-            sets_failed=0,
-            sets_skipped=0,
-            total_tracks=0,
-            failed_set_labels=[],
-            api_ingest_success=False,
-        )
-
-    assert result.warnings == 1
-    assert result.findings_posted == 1
-    assert result.evaluator_failed is True
-
-
-def test_api_post_failure_is_caught_and_marks_evaluator_failed(monkeypatch):
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-test")
-    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://example.test")
-
-    api_client = SimpleNamespace(
-        post=MagicMock(side_effect=RuntimeError("post failed"))
-    )
-    claude_client = SimpleNamespace(
-        messages=SimpleNamespace(
-            create=MagicMock(
-                return_value=_fake_claude_message(
-                    json.dumps(
-                        [
-                            {
-                                "dimension": "pipeline_consistency",
-                                "severity": "INFO",
-                                "finding": "All checks passed.",
-                                "suggestion": None,
-                            }
-                        ]
-                    )
-                )
-            )
-        )
-    )
-
-    with (
-        patch(
-            "deejay_set_processor.pipeline_evaluator.Anthropic",
-            return_value=claude_client,
-        ),
-        patch(
-            "deejay_set_processor.pipeline_evaluator.KaianoApiClient",
-            return_value=api_client,
-        ),
-    ):
-        result = evaluate_pipeline_run(
-            run_id="run-post-fail",
+        m_client.from_env.return_value = api
+        evaluate_pipeline_run(
+            run_id="r1",
             repo="deejay-set-processor-dev",
             sets_imported=1,
             sets_failed=0,
@@ -216,8 +75,94 @@ def test_api_post_failure_is_caught_and_marks_evaluator_failed(monkeypatch):
             total_tracks=1,
             failed_set_labels=[],
             api_ingest_success=True,
+            sets_attempted=1,
+            collection_update=False,
         )
 
-    assert result.infos == 1
-    assert result.findings_posted == 0
-    assert result.evaluator_failed is True
+    assert prompts and "CSV PROCESSING evaluation context" in prompts[0]
+
+
+def test_evaluate_pipeline_run_uses_collection_prompt_when_collection_update_true(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://x")
+    prompts: list[str] = []
+
+    def _capture(**kw: object) -> str:
+        prompts.append(str(kw["user_prompt"]))
+        return '{"findings":[]}'
+
+    api = SimpleNamespace(post=MagicMock(return_value={}))
+
+    with (
+        patch.object(pe, "_anthropic_messages_create", side_effect=_capture),
+        patch("kaiano.api.KaianoApiClient") as m_client,
+    ):
+        m_client.from_env.return_value = api
+        evaluate_pipeline_run(
+            run_id="r2",
+            repo="deejay-set-processor-dev",
+            sets_imported=0,
+            sets_failed=0,
+            sets_skipped=0,
+            total_tracks=0,
+            failed_set_labels=[],
+            api_ingest_success=True,
+            sets_attempted=0,
+            collection_update=True,
+        )
+
+    assert prompts and "COLLECTION_UPDATE evaluation context" in prompts[0]
+
+
+def test_evaluate_pipeline_run_posts_findings(monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://x")
+
+    payload = {
+        "findings": [
+            {
+                "dimension": "pipeline_consistency",
+                "severity": "INFO",
+                "finding": "ok",
+                "suggestion": "",
+            }
+        ]
+    }
+    posted: list[tuple[str, dict]] = []
+
+    def _post(path: str, p: dict) -> dict:
+        posted.append((path, p))
+        return {}
+
+    api = SimpleNamespace(post=_post)
+
+    with (
+        patch.object(
+            pe,
+            "_anthropic_messages_create",
+            return_value=json.dumps(payload),
+        ),
+        patch("kaiano.api.KaianoApiClient") as m_client,
+    ):
+        m_client.from_env.return_value = api
+        evaluate_pipeline_run(
+            run_id="r3",
+            repo="deejay-set-processor-dev",
+            sets_imported=0,
+            sets_failed=0,
+            sets_skipped=0,
+            total_tracks=0,
+            failed_set_labels=[],
+            api_ingest_success=True,
+            sets_attempted=0,
+        )
+
+    assert len(posted) == 1
+    path, body = posted[0]
+    assert path == "/v1/evaluations"
+    assert body["repo"] == "deejay-set-processor-dev"
+    assert body["severity"] == "INFO"
+    assert body["details"]["run_id"] == "r3"
+    assert body["details"]["finding"] == "ok"
