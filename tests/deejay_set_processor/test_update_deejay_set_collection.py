@@ -98,7 +98,7 @@ def test_generate_dj_set_collection_snapshot_shape():
         mock_config.SUMMARY_TAB_NAME = "Summary"
         mock_create_snapshot.return_value = {"folders": []}
 
-        generate_dj_set_collection()
+        generate_dj_set_collection.fn()
 
         mock_write_snapshot.assert_called_once()
         snapshot, path = mock_write_snapshot.call_args.args
@@ -168,7 +168,7 @@ def test_generate_dj_set_collection_handles_write_failure_and_continues():
         mock_config.SUMMARY_TAB_NAME = "Summary"
         mock_create_snapshot.return_value = {"folders": []}
 
-        generate_dj_set_collection()
+        generate_dj_set_collection.fn()
 
         mock_write_snapshot.assert_called_once()
         mock_log.exception.assert_called()

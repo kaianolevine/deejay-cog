@@ -52,6 +52,17 @@ View runs: [app.prefect.cloud](https://app.prefect.cloud)
 
 ---
 
+## Deprecation Plan
+
+The following workflows are validation-layer only and will be removed once PostgreSQL is confirmed as the source of truth for all DJ set data:
+
+- **update-dj-set-collection**: Rebuilds Google Sheets master collection and JSON snapshot. Kept for cross-validation against PostgreSQL data.
+- **generate-summaries**: Generates per-year summary sheets. Kept for cross-validation against PostgreSQL data.
+
+**process-new-csv-files** is permanent and will be extended with additional functionality in future phases.
+
+---
+
 ## Where this processor fits
 
 - **deejay-set-processor** is the backend that performs steps 3–5: ingest CSVs into Sheets, maintain the collection sheet and JSON, and build summary sheets.

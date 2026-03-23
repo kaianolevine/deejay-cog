@@ -1,22 +1,33 @@
 import kaiano.config as config
 from kaiano import logger as logger_mod
 from kaiano.google import GoogleAPI
+from prefect import flow, get_run_logger
 
 import deejay_set_processor.deduplicate_summary as deduplication
 
 log = logger_mod.get_logger()
 
 
-def generate_next_missing_summary() -> None:
+@flow(
+    name="generate-summaries",
+    description="Generates per-year summary sheets. "
+    "Validation layer — will be deprecated once "
+    "PostgreSQL is confirmed as source of truth.",
+)
+def generate_summaries_flow() -> None:
     """Generate the next missing summary for a year."""
+    try:
+        logger = get_run_logger()
+    except Exception:
+        logger = log
 
-    log.info("🚀 Starting generate_next_missing_summary()")
+    logger.info("🚀 Starting generate_next_missing_summary()")
     g = GoogleAPI.from_env()
 
     summary_folder_id = g.drive.ensure_folder(
         config.DJ_SETS_FOLDER_ID, config.SUMMARY_FOLDER_NAME
     )
-    log.debug(f"Summary folder: {summary_folder_id}")
+    logger.debug(f"Summary folder: {summary_folder_id}")
 
     year_folders = g.drive.list_files(
         config.DJ_SETS_FOLDER_ID,
@@ -25,7 +36,7 @@ def generate_next_missing_summary() -> None:
         include_folders=True,
     )
 
-    log.debug(f"Year folders found: {[f.name for f in year_folders]}")
+    logger.debug(f"Year folders found: {[f.name for f in year_folders]}")
 
     for folder in year_folders:
         year = folder.name
@@ -42,26 +53,26 @@ def generate_next_missing_summary() -> None:
             f for f in all_summary_files if f.name and summary_name in f.name
         ]
         existing_names = [f.name for f in existing_summaries]
-        log.debug(f"Found existing summaries for {year}: {existing_names}")
+        logger.debug(f"Found existing summaries for {year}: {existing_names}")
 
         canonical = next(
             (f for f in existing_summaries if f.name == summary_name), None
         )
         if canonical:
-            log.info(
+            logger.info(
                 f"✅ Summary already exists for {year} — running dedup on '{summary_name}' and continuing"
             )
             deduplication.deduplicate_summary(canonical.id, g=g)
             continue
 
         if existing_summaries:
-            log.warning(
+            logger.warning(
                 f"⚠️ Found summary-like files for {year} but no exact '{summary_name}' match. "
                 f"Skipping dedup to avoid modifying the wrong file. Matches: {existing_names}"
             )
             continue
 
-        log.debug(f"Getting files for year {year}")
+        logger.debug(f"Getting files for year {year}")
         files = g.drive.list_files(
             folder.id,
             mime_type="application/vnd.google-apps.spreadsheet",
@@ -73,13 +84,17 @@ def generate_next_missing_summary() -> None:
             (f.name or "").startswith("FAILED_") or "_Cleaned" in (f.name or "")
             for f in files
         ):
-            log.info(f"⛔ Skipping year {year} — unready files found")
+            logger.info(f"⛔ Skipping year {year} — unready files found")
             continue
 
-        log.debug(f"Files to process for {year}: {[f.name for f in files]}")
-        log.info(f"🔧 Generating summary for {year}...")
+        logger.debug(f"Files to process for {year}: {[f.name for f in files]}")
+        logger.info(f"🔧 Generating summary for {year}...")
 
         generate_summary_for_folder(g, files, summary_folder_id, year)
+
+
+# Backwards-compatible name for callers and tests
+generate_next_missing_summary = generate_summaries_flow
 
 
 def generate_summary_for_folder(
@@ -232,4 +247,4 @@ def generate_summary_for_folder(
 
 
 if __name__ == "__main__":
-    generate_next_missing_summary()
+    generate_summaries_flow()

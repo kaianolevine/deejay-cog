@@ -24,6 +24,8 @@ jobs:
       OWNER_ID: ${{ vars.OWNER_ID }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       STANDARDS_VERSION: "6.0"
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+      PREFECT_API_URL: ${{ vars.PREFECT_API_URL }}
 
     steps:
       - name: Checkout repo
@@ -37,6 +39,12 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --all-extras
+
+      - name: Authenticate with Prefect Cloud
+        run: |
+          uv run prefect cloud login \
+            --key ${{ secrets.PREFECT_API_KEY }} \
+            --workspace ${{ vars.PREFECT_ACCOUNT_SLUG }}/${{ vars.PREFECT_WORKSPACE_SLUG }}
 
       - name: Run create_dj_set_collection
         run: uv run python -u src/deejay_set_processor/update_deejay_set_collection.py

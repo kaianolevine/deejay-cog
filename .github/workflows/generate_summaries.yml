@@ -16,6 +16,8 @@ jobs:
     env:
       LOGGING_LEVEL: ${{ vars.LOGGING_LEVEL }}
       GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+      PREFECT_API_KEY: ${{ secrets.PREFECT_API_KEY }}
+      PREFECT_API_URL: ${{ vars.PREFECT_API_URL }}
 
     steps:
       - name: Checkout repo
@@ -29,6 +31,12 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --all-extras
+
+      - name: Authenticate with Prefect Cloud
+        run: |
+          uv run prefect cloud login \
+            --key ${{ secrets.PREFECT_API_KEY }} \
+            --workspace ${{ vars.PREFECT_ACCOUNT_SLUG }}/${{ vars.PREFECT_WORKSPACE_SLUG }}
 
       - name: Run generate_summaries
         run: uv run python -u src/deejay_set_processor/generate_summaries.py
