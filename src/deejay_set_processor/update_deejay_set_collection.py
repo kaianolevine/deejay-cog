@@ -197,8 +197,10 @@ def generate_dj_set_collection():
         getattr(config, "DEEJAY_SET_COLLECTION_JSON_PATH", None)
         or "v1/deejay-sets/deejay_set_collection.json"
     )
+    json_snapshot_written = False
     try:
         write_json_snapshot(collection_snapshot, json_output_path)
+        json_snapshot_written = True
         logger.info(f"🧾 Wrote DJ set collection JSON snapshot to: {json_output_path}")
     except Exception:
         logger.exception(
@@ -242,6 +244,15 @@ def generate_dj_set_collection():
                 api_ingest_success=True,
                 sets_attempted=0,
                 collection_update=True,
+                folders_processed=len(subfolders),
+                tabs_written=len(tabs_to_add),
+                total_sets=sum(
+                    len(fs["items"])
+                    for fs in collection_snapshot["folders"]
+                    if fs["name"].lower() != "summary"
+                ),
+                json_snapshot_written=json_snapshot_written,
+                folder_names=[f.name for f in subfolders],
             )
         except Exception:
             logger.exception(

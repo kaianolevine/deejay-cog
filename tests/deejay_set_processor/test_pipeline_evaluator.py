@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -14,11 +15,64 @@ def test_collection_update_prompt_is_collection_specific() -> None:
     prompt = build_collection_evaluation_prompt(
         run_id="23312071243",
         standards_version="6.0",
+        folders_processed=3,
+        tabs_written=2,
+        total_sets=12,
+        json_snapshot_written=True,
+        folder_names=["2024", "2023", "Summary"],
     )
     assert "COLLECTION_UPDATE evaluation context" in prompt
     assert "No CSV processing happened in this run" in prompt
     assert "pipeline_consistency" in prompt
     assert "23312071243" in prompt
+    assert "folders_processed: 3" in prompt
+    assert "tabs_written: 2" in prompt
+    assert "total_sets: 12" in prompt
+    assert "json_snapshot_written: True" in prompt
+    assert "folder_names: 2024, 2023, Summary" in prompt
+
+
+def test_collection_prompt_warns_on_zero_tabs() -> None:
+    prompt = build_collection_evaluation_prompt(
+        run_id="r-zero-tabs",
+        standards_version="6.0",
+        folders_processed=3,
+        tabs_written=0,
+        total_sets=9,
+        json_snapshot_written=True,
+        folder_names=["2024", "2023"],
+    )
+    assert "If tabs_written == 0 and folders_processed > 0: emit WARN" in prompt
+    assert "No tabs written despite N folders processed" in prompt
+
+
+def test_collection_prompt_errors_on_missing_snapshot() -> None:
+    prompt = build_collection_evaluation_prompt(
+        run_id="r-snapshot-fail",
+        standards_version="6.0",
+        folders_processed=3,
+        tabs_written=2,
+        total_sets=9,
+        json_snapshot_written=False,
+        folder_names=["2024", "2023"],
+    )
+    assert "If json_snapshot_written is False: emit ERROR" in prompt
+    assert "JSON snapshot write failed" in prompt
+
+
+def test_collection_prompt_warns_on_missing_current_year() -> None:
+    prompt = build_collection_evaluation_prompt(
+        run_id="r-missing-year",
+        standards_version="6.0",
+        folders_processed=2,
+        tabs_written=2,
+        total_sets=5,
+        json_snapshot_written=True,
+        folder_names=["2022", "2023"],
+    )
+    assert "If folder_names does not include current_year: emit WARN" in prompt
+    assert "Current year folder missing" in prompt
+    assert f"current_year: {datetime.now().year}" in prompt
 
 
 def test_csv_processing_prompt_is_csv_specific() -> None:
@@ -117,6 +171,11 @@ def test_evaluate_pipeline_run_uses_collection_prompt_when_collection_update_tru
             api_ingest_success=True,
             sets_attempted=0,
             collection_update=True,
+            folders_processed=3,
+            tabs_written=2,
+            total_sets=6,
+            json_snapshot_written=True,
+            folder_names=["2024", "2023", "Summary"],
         )
 
     assert prompts and "COLLECTION_UPDATE evaluation context" in prompts[0]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime
 from typing import Any
 
 from kaiano import logger as logger_mod
@@ -133,18 +134,37 @@ Rules:
 """
 
 
-def _build_prompt_collection(*, run_id: str, standards_version: str) -> str:
+def _build_prompt_collection(
+    *,
+    run_id: str,
+    standards_version: str,
+    folders_processed: int,
+    tabs_written: int,
+    total_sets: int,
+    json_snapshot_written: bool,
+    folder_names: list[str],
+) -> str:
+    current_year = datetime.now().year
+    formatted_folder_names = ", ".join(folder_names) if folder_names else "(none)"
     return f"""You are evaluating a DJ set COLLECTION UPDATE pipeline run against engineering standards v{standards_version}.
 
 COLLECTION_UPDATE evaluation context:
 - This run rebuilt the master DJ set collection spreadsheet and JSON snapshot.
 - No CSV processing happened in this run.
-- The Python job reached the evaluation step without raising an uncaught exception (treat as successful completion of the collection job unless counts or context imply otherwise).
 - GitHub Actions run_id: {run_id}
+- folders_processed: {folders_processed}
+- tabs_written: {tabs_written}
+- total_sets: {total_sets}
+- json_snapshot_written: {json_snapshot_written}
+- folder_names: {formatted_folder_names}
+- current_year: {current_year}
 
-Evaluate: did the collection update complete successfully?
-- Dimension: pipeline_consistency
-- If collection_update=True and there are no failures implied: emit an INFO finding confirming the collection was updated successfully.
+Evaluate collection update conformance using these rules:
+- If tabs_written == 0 and folders_processed > 0: emit WARN "No tabs written despite N folders processed"
+- If json_snapshot_written is False: emit ERROR "JSON snapshot write failed"
+- If folder_names does not include current_year: emit WARN "Current year folder missing"
+- If total_sets == 0 and folders_processed > 0: emit WARN "No sets found across any folder"
+- Otherwise: emit INFO confirming counts
 
 Respond with ONLY valid JSON (no markdown) in this exact shape:
 {{"findings":[{{"dimension":"pipeline_consistency","severity":"INFO|WARN|ERROR","finding":"...","suggestion":""}}]}}
@@ -170,6 +190,11 @@ def evaluate_pipeline_run(
     duplicate_csv_count: int = 0,
     direct_finding_text: str | None = None,
     direct_severity: str | None = None,
+    folders_processed: int = 0,
+    tabs_written: int = 0,
+    total_sets: int = 0,
+    json_snapshot_written: bool = False,
+    folder_names: list[str] | None = None,
 ) -> None:
     """
     Call Claude, then POST each finding to KAIANO_API_BASE_URL /v1/evaluations.
@@ -204,7 +229,13 @@ def evaluate_pipeline_run(
         try:
             if collection_update:
                 user_prompt = _build_prompt_collection(
-                    run_id=run_id, standards_version=standards_version
+                    run_id=run_id,
+                    standards_version=standards_version,
+                    folders_processed=folders_processed,
+                    tabs_written=tabs_written,
+                    total_sets=total_sets,
+                    json_snapshot_written=json_snapshot_written,
+                    folder_names=folder_names or [],
                 )
             else:
                 user_prompt = _build_prompt_csv(
@@ -321,6 +352,23 @@ def build_csv_evaluation_prompt(
     )
 
 
-def build_collection_evaluation_prompt(*, run_id: str, standards_version: str) -> str:
+def build_collection_evaluation_prompt(
+    *,
+    run_id: str,
+    standards_version: str,
+    folders_processed: int,
+    tabs_written: int,
+    total_sets: int,
+    json_snapshot_written: bool,
+    folder_names: list[str],
+) -> str:
     """Exposed for tests (same body as internal collection prompt)."""
-    return _build_prompt_collection(run_id=run_id, standards_version=standards_version)
+    return _build_prompt_collection(
+        run_id=run_id,
+        standards_version=standards_version,
+        folders_processed=folders_processed,
+        tabs_written=tabs_written,
+        total_sets=total_sets,
+        json_snapshot_written=json_snapshot_written,
+        folder_names=folder_names,
+    )
