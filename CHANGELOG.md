@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/kaianolevine/deejay-set-processor-dev/compare/v1.3.2...v1.4.0) (2026-03-23)
+
+
+### Features
+
+* eval migration 3 of 3*** ([1525134](https://github.com/kaianolevine/deejay-set-processor-dev/commit/152513493e8b3c4ec6c5900b18edff8607360e36))
+
 ## [1.3.2](https://github.com/kaianolevine/deejay-set-processor-dev/compare/v1.3.1...v1.3.2) (2026-03-23)
 
 
