@@ -103,10 +103,9 @@ def process_m3u_file(
     m3u_file: dict[str, Any],
     client: Any,
     owner_id: str,
-    seen_keys: set[str],
 ) -> tuple[int, int, bool]:
     """
-    Process one .m3u file: parse, POST /v1/live-plays, update seen_keys.
+    Process one .m3u file: parse, POST /v1/live-plays.
 
     Returns (plays_sent, plays_failed, file_ok).
     file_ok is False on API or unexpected errors; True on success or empty skip.
@@ -119,17 +118,7 @@ def process_m3u_file(
     try:
         lines = g.drive.download_m3u_file_data(m3u_file["id"])
         file_date_str = filename.replace(".m3u", "").strip()
-        parsed_entries = m3u_tool.parse.parse_m3u_lines(lines, seen_keys, file_date_str)
-
-        for entry in parsed_entries:
-            key = "||".join(
-                [
-                    (entry.dt or "").strip().casefold(),
-                    (entry.title or "").strip().casefold(),
-                    (entry.artist or "").strip().casefold(),
-                ]
-            )
-            seen_keys.add(key)
+        parsed_entries = m3u_tool.parse.parse_m3u_lines(lines, set(), file_date_str)
 
         payload = build_live_plays_payload(parsed_entries)
         if not payload["plays"]:
@@ -175,31 +164,21 @@ def ingest_live_history(g: GoogleAPI) -> LiveIngestSummary:
 
     client = KaianoApiClient(base_url=base_url, owner_id=owner_id or None)
 
-    logger.info("Listing .m3u files from Drive...")
     m3u_files = list(g.drive.get_all_m3u_files() or [])
-    logger.info("Found %d .m3u file(s)", len(m3u_files))
-
     if not m3u_files:
         logger.info("No .m3u files found. Nothing to ingest.")
         return LiveIngestSummary(
             plays_sent=0, plays_failed=0, files_processed=0, files_failed=0
         )
 
-    plays_sent = 0
-    plays_failed = 0
-    files_processed = 0
-    files_failed = 0
+    most_recent = m3u_files[0]
+    logger.info("Processing most recent file: %s", most_recent.get("name", ""))
+    ps, pf, file_ok = process_m3u_file(g, most_recent, client, owner_id)
 
-    seen_keys: set[str] = set()
-
-    for m3u_file in m3u_files:
-        ps, pf, file_ok = process_m3u_file(g, m3u_file, client, owner_id, seen_keys)
-        plays_sent += ps
-        plays_failed += pf
-        if file_ok:
-            files_processed += 1
-        else:
-            files_failed += 1
+    plays_sent = ps
+    plays_failed = pf
+    files_processed = 1 if file_ok else 0
+    files_failed = 0 if file_ok else 1
 
     logger.info(
         "Live history ingest complete. plays_sent=%d plays_failed=%d files_processed=%d files_failed=%d",
