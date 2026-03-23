@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/kaianolevine/deejay-set-processor-dev/compare/v1.3.0...v1.3.1) (2026-03-23)
+
+
+### Bug Fixes
+
+* adding prefect support and changing live music concurrency group ([fbab82d](https://github.com/kaianolevine/deejay-set-processor-dev/commit/fbab82dd23faab544809a5d9550ff5da01d25531))
+
 # [1.3.0](https://github.com/kaianolevine/deejay-set-processor-dev/compare/v1.2.0...v1.3.0) (2026-03-23)
 
 
