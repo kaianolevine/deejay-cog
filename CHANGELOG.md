@@ -1,3 +1,15 @@
+# [1.0.0](https://github.com/kaianolevine/deejay-set-processor-dev/compare/v0.0.84...v1.0.0) (2026-03-23)
+
+
+### Features
+
+* migrate to semantic-release automated versioning ([f665a3f](https://github.com/kaianolevine/deejay-set-processor-dev/commit/f665a3f74d63e8d1028c916dc45b2d720c4832ab))
+
+
+### BREAKING CHANGES
+
+* versioning now managed by semantic-release, manual version bump workflows removed
+
 # Changelog
 
 ## [0.0.83] - 2026-03-17
