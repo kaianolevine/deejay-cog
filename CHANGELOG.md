@@ -1,3 +1,10 @@
+## [1.3.2](https://github.com/kaianolevine/deejay-set-processor-dev/compare/v1.3.1...v1.3.2) (2026-03-23)
+
+
+### Bug Fixes
+
+* remove owner_id from live plays body, limit payload to last 4 entries ([a3b6171](https://github.com/kaianolevine/deejay-set-processor-dev/commit/a3b617134a50ae7b4137e1e43f0a03b6487dc9c7))
+
 ## [1.3.1](https://github.com/kaianolevine/deejay-set-processor-dev/compare/v1.3.0...v1.3.1) (2026-03-23)
 
 
