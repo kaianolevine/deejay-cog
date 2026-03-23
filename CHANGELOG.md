@@ -2,41 +2,60 @@
 
 ## [0.0.83] - 2026-03-17
 
+### Fixed
+
 - Fixed 422 error posting evaluation findings. Added finding key normalization and empty field guards.
 
 ## [0.0.79] - 2026-03-22
 
+### Fixed
+
 - Fixed AI evaluation context in `update_deejay_set_collection` — it was reading env vars that were never set, always defaulting to 0.
+
+### Changed
+
 - Moved CSV processing evaluation to `process_new_files.py` with real run counts (imported, failed, skipped, tracks, API ingest, duplicates).
 - Collection update runs now use `collection_update=True` with a collection-specific Claude prompt and an INFO success finding on `pipeline_consistency`.
 - Wired `ANTHROPIC_API_KEY` and `STANDARDS_VERSION` into the process-new-CSV workflow.
 
 ## [0.0.78] - 2026-03-19
 
-- "Fixed false ERROR finding when no new sets were available
-  to ingest. No-op ingest is now correctly treated as success."
+### Fixed
+
+- Fixed false ERROR finding when no new sets were available to ingest. No-op ingest is now correctly treated as success.
 
 ## [0.0.77] - 2026-03-19
 
-- "Improved Claude prompt for pipeline evaluation to enforce
-  raw JSON output. Added system prompt for better instruction
-  following."
+### Changed
+
+- Improved Claude prompt for pipeline evaluation to enforce raw JSON output. Added system prompt for better instruction following.
 
 ## [0.0.76] - 2026-03-19
 
-- Added pipeline_evaluator.py — calls Claude API after each pipeline run to evaluate conformance against standards document. Posts structured findings to deejay-marvel-api. Wired into update_deejay_set_collection workflow.
+### Added
+
+- Added `pipeline_evaluator.py` — calls Claude API after each pipeline run to evaluate conformance against standards document. Posts structured findings to deejay-marvel-api. Wired into `update_deejay_set_collection` workflow.
 
 ## [0.0.75] - 2026-03-18
+
+### Changed
 
 - Moved API ingest step from `update_deejay_set_collection` to `process_new_files`. Now only newly processed CSVs are sent to deejay-marvel-api.
 - Refactored `ingest_to_api.py` to expose `read_tracks_from_sheet` and `build_ingest_payload` as reusable functions.
 
 ## [0.0.74] - 2026-03-18
 
+### Added
+
 - Added `ingest_to_api.py` — new pipeline step that sends newly processed sets to deejay-marvel-api via POST `/v1/ingest` after collection update.
+
+### Changed
+
 - Wired into `update_deejay_set_collection.py`. Pipeline skips API step gracefully if `KAIANO_API_BASE_URL` is not set.
 
 ## [0.0.71] - 2025-03-17
+
+### Changed
 
 - Migrated from Poetry to uv, and from black/isort/flake8 to ruff.
 - Updated README to fully describe processor purpose, inputs, outputs, and configuration.

@@ -72,8 +72,7 @@ In GitHub Actions, `GOOGLE_CREDENTIALS_JSON` is typically a **secret** and `LOGG
 | **process_new_csv_files** | `repository_dispatch` (`new_csv_dj_sets`), `workflow_dispatch` | Runs `process_new_files.py` to ingest new files from the CSV source folder. |
 | **update_dj_set_collection** | `repository_dispatch` (`updated_dj_sets`), `workflow_dispatch` | Runs `update_deejay_set_collection.py`, then copies the JSON snapshot into **kaiano-api** and pushes. |
 | **generate_summaries** | `repository_dispatch` (`generate-summary`), `workflow_dispatch` | Runs `generate_summaries.py` to (re)build missing per-year summary sheets. |
-| **test-and-version** | Push, pull_request | Runs pre-commit (ruff), tests, and coverage. On push to `main`, auto-increments PATCH and tags `vX.Y.Z`. |
-| **manual-version-bump** | `workflow_dispatch` (input: minor / major) | Runs tests then bumps MINOR or MAJOR version, commits and tags, and pushes. |
+| **CI** | Push and pull request to `main` | Runs ruff and pytest with coverage on every PR/push; on push to `main`, runs **semantic-release** to version, update `CHANGELOG.md`, tag, and create GitHub releases. |
 
 The **google-app-script-trigger** repo sends `repository_dispatch` events to this repo when new CSVs are added or when the collection/summaries should be updated.
 
@@ -116,8 +115,18 @@ uv run pytest --cov=src --cov-report=term-missing
 
 ## Versioning
 
-- **PATCH**: Automatically bumped on every push to `main` by the **test-and-version** workflow; a new tag `vX.Y.Z` is created and pushed.
-- **MINOR / MAJOR**: Bumped manually via the **manual-version-bump** workflow (`workflow_dispatch`), choosing minor or major.
+This repo uses **semantic-release** for automated versioning. Versions are determined automatically from commit messages on merge to `main`:
+
+- `feat:` → minor version bump
+- `fix:` → patch version bump
+- `BREAKING CHANGE` in commit body → major bump
+- `chore` / `docs` / `refactor` / `test` / `ci` → no version bump
+
+Note: use an explicit **BREAKING CHANGE** footer for major bumps, not the `feat!:` shorthand.
+
+Never manually edit the version in `pyproject.toml`.  
+Never manually edit `CHANGELOG.md`.  
+Both are managed automatically on merge to `main`.
 
 ---
 

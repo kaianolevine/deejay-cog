@@ -40,3 +40,6 @@ venv.bak/
 # macOS
 .DS_Store
 credentials.json
+
+# Node (semantic-release CI / local tooling)
+node_modules/
