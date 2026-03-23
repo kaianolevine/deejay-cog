@@ -8,6 +8,7 @@ requires-python = ">=3.11"
 dependencies = [
     "kaiano",
     "prefect>=3.0,<4.0",
+    "pipeline_evaluator",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +22,7 @@ dev = [
 
 [tool.uv.sources]
 kaiano = { git = "https://github.com/kaianolevine/kaiano-common-utils.git", rev = "main" }
+pipeline_evaluator = { git = "https://github.com/kaianolevine/evaluator-cog.git", rev = "main" }
 
 [build-system]
 requires = ["hatchling"]

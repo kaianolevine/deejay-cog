@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 import kaiano.config as config
 from kaiano import logger as logger_mod
 from kaiano.google import GoogleAPI
+from pipeline_evaluator.evaluator import evaluate_pipeline_run
 from prefect import flow, get_run_logger, task
 
 from deejay_set_processor.ingest_to_api import (
     build_ingest_payload,
     read_tracks_from_sheet,
 )
-from deejay_set_processor.pipeline_evaluator import evaluate_pipeline_run
 
 log = logger_mod.get_logger()
 

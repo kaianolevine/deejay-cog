@@ -5,9 +5,8 @@ import kaiano.config as config
 from kaiano import logger as logger_mod
 from kaiano.google import GoogleAPI
 from kaiano.json import create_collection_snapshot, write_json_snapshot
+from pipeline_evaluator.evaluator import evaluate_pipeline_run
 from prefect import flow, get_run_logger
-
-from deejay_set_processor.pipeline_evaluator import evaluate_pipeline_run
 
 log = logger_mod.get_logger()
 
