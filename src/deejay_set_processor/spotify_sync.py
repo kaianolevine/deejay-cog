@@ -215,22 +215,25 @@ def update_spotify_radio_playlist(
 
 
 def create_spotify_playlist_for_file(
-    sp: SpotifyAPI, date_str: str, found_uris: list[str]
+    sp: SpotifyAPI, set_name: str, found_uris: list[str]
 ) -> str | None:
-    """Create or update a per-day Spotify playlist."""
+    """Create or replace a per-set Spotify playlist.
+
+    If a playlist with the given name already exists, it is cleared and
+    repopulated with ``found_uris``. Otherwise a new playlist is created.
+    """
     if not found_uris:
         return None
 
-    playlist_name = f"{date_str} History Set"
-
     try:
-        existing = sp.find_playlist_by_name(playlist_name)
+        existing = sp.find_playlist_by_name(set_name)
         if existing:
             playlist_id = existing["id"]
+            sp.clear_playlist(playlist_id)
             sp.add_tracks_to_specific_playlist(playlist_id, found_uris)
             return playlist_id
 
-        playlist_id = sp.create_playlist(playlist_name, DEFAULT_PLAYLIST_DESCRIPTION)
+        playlist_id = sp.create_playlist(set_name, DEFAULT_PLAYLIST_DESCRIPTION)
         if not playlist_id:
             return None
 
@@ -241,7 +244,7 @@ def create_spotify_playlist_for_file(
     except Exception as e:
         log.error(
             "Failed creating/updating playlist '%s': %s",
-            playlist_name,
+            set_name,
             e,
             exc_info=True,
         )
@@ -325,12 +328,12 @@ def get_spotify_client() -> SpotifyAPI | None:
 
 def sync_set_to_spotify(
     sp: SpotifyAPI,
-    date_str: str,
+    set_name: str,
     tracks: list[dict],
 ) -> str | None:
     """Search Spotify for each track and update playlists.
 
-    Returns the per-day playlist ID if one was created/updated, else None.
+    Returns the per-set playlist ID if one was created/updated, else None.
     Idempotent — existing playlists are found by name before creating.
     Never raises.
     """
@@ -353,13 +356,13 @@ def sync_set_to_spotify(
 
         log.info(
             "%s: %d found on Spotify, %d not found",
-            date_str,
+            set_name,
             len(matched),
             not_found,
         )
 
         update_spotify_radio_playlist(sp, SPOTIFY_RADIO_PLAYLIST_ID, found_uris)
-        return create_spotify_playlist_for_file(sp, date_str, found_uris)
+        return create_spotify_playlist_for_file(sp, set_name, found_uris)
     except Exception as e:
         log.error("sync_set_to_spotify failed: %s", e, exc_info=True)
         return None

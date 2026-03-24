@@ -367,7 +367,7 @@ def _ingest_set_to_api(
 @task(name="sync-to-spotify")
 def _sync_set_to_spotify(
     sheet_id: str,
-    set_date: str,
+    set_name: str,
     label: str,
     g: GoogleAPI,
 ) -> None:
@@ -385,7 +385,7 @@ def _sync_set_to_spotify(
             return
 
         tracks = read_tracks_from_sheet(g, sheet_id)
-        sync_set_to_spotify(sp, set_date, tracks)
+        sync_set_to_spotify(sp, set_name, tracks)
     except Exception as e:
         logger.error("❌ Spotify sync failed for %s: %s", label, e)
 
@@ -452,7 +452,7 @@ def process_csv_file(
                 )
                 _sync_set_to_spotify(
                     sheet_id=sheet_id,
-                    set_date=set_date,
+                    set_name=base_name,
                     label=base_name,
                     g=g,
                 )

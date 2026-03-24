@@ -1,6 +1,6 @@
 import json
 from types import SimpleNamespace
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, call, patch
 
 from deejay_set_processor import spotify_sync as ss
 
@@ -165,9 +165,29 @@ def test_create_spotify_playlist_for_file_updates_existing() -> None:
     sp.find_playlist_by_name.return_value = {"id": "existing"}
     pid = ss.create_spotify_playlist_for_file(sp, "2024-01-01", ["u1"])
     assert pid == "existing"
-    sp.find_playlist_by_name.assert_called_once_with("2024-01-01 History Set")
+    sp.find_playlist_by_name.assert_called_once_with("2024-01-01")
+    sp.clear_playlist.assert_called_once_with("existing")
     sp.add_tracks_to_specific_playlist.assert_called_once_with("existing", ["u1"])
     sp.create_playlist.assert_not_called()
+
+
+def test_create_spotify_playlist_for_file_clears_existing_before_add() -> None:
+    sp = MagicMock()
+    sp.find_playlist_by_name.return_value = {"id": "existing"}
+    ss.create_spotify_playlist_for_file(sp, "2024-03-15 MADjam", ["u1", "u2"])
+    assert sp.method_calls == [
+        call.find_playlist_by_name("2024-03-15 MADjam"),
+        call.clear_playlist("existing"),
+        call.add_tracks_to_specific_playlist("existing", ["u1", "u2"]),
+    ]
+
+
+def test_create_spotify_playlist_for_file_skips_clear_when_creating_new() -> None:
+    sp = MagicMock()
+    sp.find_playlist_by_name.return_value = None
+    sp.create_playlist.return_value = "newpl"
+    ss.create_spotify_playlist_for_file(sp, "My Set", ["u1"])
+    sp.clear_playlist.assert_not_called()
 
 
 def test_create_spotify_playlist_for_file_creates_new_dedupes() -> None:
@@ -177,6 +197,7 @@ def test_create_spotify_playlist_for_file_creates_new_dedupes() -> None:
     pid = ss.create_spotify_playlist_for_file(sp, "2024-01-01", ["a", "a", "b"])
     assert pid == "newpl"
     sp.create_playlist.assert_called_once()
+    assert sp.create_playlist.call_args[0][0] == "2024-01-01"
     sp.add_tracks_to_specific_playlist.assert_called_once_with("newpl", ["a", "b"])
 
 
@@ -372,3 +393,21 @@ def test_sync_set_to_spotify_returns_none_when_internal_error(monkeypatch) -> No
     sp.search_track.side_effect = RuntimeError("api down")
     tracks = [{"artist": "A", "title": "T"}]
     assert ss.sync_set_to_spotify(sp, "2024-01-01", tracks) is None
+
+
+def test_sync_set_to_spotify_passes_full_set_name_to_playlist_create(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(ss, "SPOTIFY_RADIO_PLAYLIST_ID", "radio")
+    sp = MagicMock()
+    sp.search_track.return_value = "u1"
+    full_name = "2024-03-15 MADjam"
+    tracks = [{"artist": "A", "title": "T"}]
+    with (
+        patch.object(ss, "update_spotify_radio_playlist"),
+        patch.object(
+            ss, "create_spotify_playlist_for_file", return_value="pl"
+        ) as m_create,
+    ):
+        ss.sync_set_to_spotify(sp, full_name, tracks)
+    m_create.assert_called_once_with(sp, full_name, ["u1"])
