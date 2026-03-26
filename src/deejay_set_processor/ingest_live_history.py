@@ -13,6 +13,7 @@ import pytz
 from kaiano import logger as logger_mod
 from kaiano.google import GoogleAPI
 from kaiano.vdj.m3u import M3UToolbox
+from pipeline_evaluator.evaluator import evaluate_pipeline_run
 from prefect import flow, get_run_logger, task
 
 log = logger_mod.get_logger()
@@ -57,12 +58,87 @@ def _prefect_logger():
         return log
 
 
+def _handle_flow_failure(flow, flow_run, state) -> None:
+    """
+    Prefect failure/crash hook: write a direct evaluation finding.
+    Never raises.
+    """
+    logger = _prefect_logger()
+    try:
+        state_name = str(getattr(state, "name", "FAILED"))
+        state_type = str(getattr(state, "type", "")).upper()
+        severity = (
+            "ERROR" if state_type == "CRASHED" or state_name == "Crashed" else "WARN"
+        )
+        run_id = str(getattr(flow_run, "id", "") or os.environ.get("GITHUB_RUN_ID", ""))
+        if not run_id:
+            run_id = "prefect-unknown-run"
+
+        logger.error("Flow failure hook fired: run_id=%s state=%s", run_id, state_name)
+        evaluate_pipeline_run(
+            run_id=run_id,
+            repo="deejay-set-processor-dev",
+            flow_name=flow.name,
+            sets_imported=0,
+            sets_failed=0,
+            sets_skipped=0,
+            total_tracks=0,
+            failed_set_labels=[],
+            api_ingest_success=True,
+            sets_attempted=0,
+            collection_update=False,
+            direct_finding_text=f"Flow entered {state_name} unexpectedly",
+            direct_severity=severity,
+        )
+    except Exception:
+        logger.exception("Flow failure hook failed unexpectedly")
+
+
 @dataclasses.dataclass
 class LiveIngestSummary:
     plays_sent: int
     plays_failed: int
     files_processed: int
     files_failed: int
+
+
+def _evaluate_live_ingest_run(summary: LiveIngestSummary) -> None:
+    """Best-effort post-run evaluation for live history ingest."""
+    logger = _prefect_logger()
+    if not os.environ.get("ANTHROPIC_API_KEY") or not os.environ.get(
+        "KAIANO_API_BASE_URL"
+    ):
+        return
+    run_id = os.environ.get("GITHUB_RUN_ID", "local-run")
+    try:
+        sev = (
+            "INFO"
+            if summary.plays_failed == 0 and summary.files_failed == 0
+            else "WARN"
+        )
+        evaluate_pipeline_run(
+            run_id=run_id,
+            repo="deejay-set-processor-dev",
+            flow_name="ingest-live-history",
+            sets_imported=0,
+            sets_failed=0,
+            sets_skipped=0,
+            total_tracks=0,
+            failed_set_labels=[],
+            api_ingest_success=True,
+            sets_attempted=0,
+            collection_update=False,
+            direct_finding_text=(
+                "Live history ingest: "
+                f"plays_sent={summary.plays_sent}, plays_failed={summary.plays_failed}, "
+                f"files_processed={summary.files_processed}, files_failed={summary.files_failed}"
+            ),
+            direct_severity=sev,
+        )
+    except Exception:
+        logger.exception(
+            "Live history pipeline evaluation raised unexpectedly (should be best-effort)"
+        )
 
 
 def build_live_plays_payload(entries: list) -> dict[str, Any]:
@@ -145,6 +221,8 @@ def process_m3u_file(
 @flow(
     name="ingest-live-history",
     description="Read VDJ .m3u history files from Drive and send plays to deejay-marvel-api.",
+    on_failure=[_handle_flow_failure],
+    on_crashed=[_handle_flow_failure],
 )
 def ingest_live_history(g: GoogleAPI) -> LiveIngestSummary:
     """
@@ -156,18 +234,22 @@ def ingest_live_history(g: GoogleAPI) -> LiveIngestSummary:
 
     if not base_url:
         logger.warning("KAIANO_API_BASE_URL not set — skipping live history ingest")
-        return LiveIngestSummary(
+        summary = LiveIngestSummary(
             plays_sent=0, plays_failed=0, files_processed=0, files_failed=0
         )
+        _evaluate_live_ingest_run(summary)
+        return summary
 
     client = KaianoApiClient(base_url=base_url, owner_id=owner_id or None)
 
     m3u_files = list(g.drive.get_all_m3u_files() or [])
     if not m3u_files:
         logger.info("No .m3u files found. Nothing to ingest.")
-        return LiveIngestSummary(
+        summary = LiveIngestSummary(
             plays_sent=0, plays_failed=0, files_processed=0, files_failed=0
         )
+        _evaluate_live_ingest_run(summary)
+        return summary
 
     most_recent = m3u_files[0]
     logger.info("Processing most recent file: %s", most_recent.get("name", ""))
@@ -185,12 +267,14 @@ def ingest_live_history(g: GoogleAPI) -> LiveIngestSummary:
         files_processed,
         files_failed,
     )
-    return LiveIngestSummary(
+    summary = LiveIngestSummary(
         plays_sent=plays_sent,
         plays_failed=plays_failed,
         files_processed=files_processed,
         files_failed=files_failed,
     )
+    _evaluate_live_ingest_run(summary)
+    return summary
 
 
 if __name__ == "__main__":

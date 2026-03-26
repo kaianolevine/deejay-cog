@@ -1,6 +1,9 @@
+import os
+
 import kaiano.config as config
 from kaiano import logger as logger_mod
 from kaiano.google import GoogleAPI
+from pipeline_evaluator.evaluator import evaluate_pipeline_run
 from prefect import flow, get_run_logger
 
 import deejay_set_processor.deduplicate_summary as deduplication
@@ -8,11 +11,56 @@ import deejay_set_processor.deduplicate_summary as deduplication
 log = logger_mod.get_logger()
 
 
+def _prefect_logger():
+    try:
+        return get_run_logger()
+    except Exception:
+        return log
+
+
+def _handle_flow_failure(flow, flow_run, state) -> None:
+    """
+    Prefect failure/crash hook: write a direct evaluation finding.
+    Never raises.
+    """
+    logger = _prefect_logger()
+    try:
+        state_name = str(getattr(state, "name", "FAILED"))
+        state_type = str(getattr(state, "type", "")).upper()
+        severity = (
+            "ERROR" if state_type == "CRASHED" or state_name == "Crashed" else "WARN"
+        )
+        run_id = str(getattr(flow_run, "id", "") or os.environ.get("GITHUB_RUN_ID", ""))
+        if not run_id:
+            run_id = "prefect-unknown-run"
+
+        logger.error("Flow failure hook fired: run_id=%s state=%s", run_id, state_name)
+        evaluate_pipeline_run(
+            run_id=run_id,
+            repo="deejay-set-processor-dev",
+            flow_name=flow.name,
+            sets_imported=0,
+            sets_failed=0,
+            sets_skipped=0,
+            total_tracks=0,
+            failed_set_labels=[],
+            api_ingest_success=True,
+            sets_attempted=0,
+            collection_update=False,
+            direct_finding_text=f"Flow entered {state_name} unexpectedly",
+            direct_severity=severity,
+        )
+    except Exception:
+        logger.exception("Flow failure hook failed unexpectedly")
+
+
 @flow(
     name="generate-summaries",
     description="Generates per-year summary sheets. "
     "Validation layer — will be deprecated once "
     "PostgreSQL is confirmed as source of truth.",
+    on_failure=[_handle_flow_failure],
+    on_crashed=[_handle_flow_failure],
 )
 def generate_summaries_flow() -> None:
     """Generate the next missing summary for a year."""
@@ -38,10 +86,17 @@ def generate_summaries_flow() -> None:
 
     logger.debug(f"Year folders found: {[f.name for f in year_folders]}")
 
+    years_processed = 0
+    summaries_generated = 0
+    summaries_skipped_no_canonical = 0
+    dedup_runs = 0
+
     for folder in year_folders:
         year = folder.name
         if (year or "").lower() == "summary":
             continue
+
+        years_processed += 1
 
         summary_name = f"{year} Summary"
 
@@ -63,6 +118,7 @@ def generate_summaries_flow() -> None:
                 f"✅ Summary already exists for {year} — running dedup on '{summary_name}' and continuing"
             )
             deduplication.deduplicate_summary(canonical.id, g=g)
+            dedup_runs += 1
             continue
 
         if existing_summaries:
@@ -70,6 +126,7 @@ def generate_summaries_flow() -> None:
                 f"⚠️ Found summary-like files for {year} but no exact '{summary_name}' match. "
                 f"Skipping dedup to avoid modifying the wrong file. Matches: {existing_names}"
             )
+            summaries_skipped_no_canonical += 1
             continue
 
         logger.debug(f"Getting files for year {year}")
@@ -90,7 +147,37 @@ def generate_summaries_flow() -> None:
         logger.debug(f"Files to process for {year}: {[f.name for f in files]}")
         logger.info(f"🔧 Generating summary for {year}...")
 
-        generate_summary_for_folder(g, files, summary_folder_id, year)
+        if generate_summary_for_folder(g, files, summary_folder_id, year):
+            summaries_generated += 1
+
+    run_id = os.environ.get("GITHUB_RUN_ID", "local-run")
+    if os.environ.get("ANTHROPIC_API_KEY") and os.environ.get("KAIANO_API_BASE_URL"):
+        try:
+            evaluate_pipeline_run(
+                run_id=run_id,
+                repo="deejay-set-processor-dev",
+                flow_name="generate-summaries",
+                sets_imported=0,
+                sets_failed=0,
+                sets_skipped=0,
+                total_tracks=0,
+                failed_set_labels=[],
+                api_ingest_success=True,
+                sets_attempted=0,
+                collection_update=False,
+                direct_finding_text=(
+                    "Summary pipeline: "
+                    f"years_processed={years_processed}, "
+                    f"summaries_generated={summaries_generated}, "
+                    f"summaries_skipped_no_canonical_match={summaries_skipped_no_canonical}, "
+                    f"dedup_runs={dedup_runs}"
+                ),
+                direct_severity="INFO",
+            )
+        except Exception:
+            logger.exception(
+                "Summary pipeline evaluation raised unexpectedly (should be best-effort)"
+            )
 
 
 # Backwards-compatible name for callers and tests
@@ -102,7 +189,7 @@ def generate_summary_for_folder(
     files,
     summary_folder_id: str,
     year: str,
-) -> None:
+) -> bool:
     log.debug(
         f"Starting generate_summary_for_folder for year {year} with {len(files)} files"
     )
@@ -178,7 +265,7 @@ def generate_summary_for_folder(
 
     if not sheet_data:
         log.info(f"📭 No valid data found in folder: {year}")
-        return
+        return False
 
     desired_display = [str(c).strip() for c in config.desiredOrder]
     desired_canon = [_canon_header(c) for c in desired_display]
@@ -244,6 +331,7 @@ def generate_summary_for_folder(
     )
 
     deduplication.deduplicate_summary(year_summary_id, g=g)
+    return True
 
 
 if __name__ == "__main__":

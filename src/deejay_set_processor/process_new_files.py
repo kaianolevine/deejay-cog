@@ -75,6 +75,11 @@ class CsvPipelineStats:
     failed_set_labels: list[str] = field(default_factory=list)
     ingest_attempted: int = 0
     ingest_failed: int = 0
+    spotify_failed: int = 0
+    bad_filename_in_file: int = 0  # post-import path: could not extract date/venue
+    ingest_skipped_no_tracks: int = 0
+    ingest_skipped_env_missing: int = 0
+    track_read_failed: int = 0
 
 
 def normalize_prefixes_in_source(drive) -> None:
@@ -325,6 +330,8 @@ def _ingest_set_to_api(
         logger.warning(
             "KAIANO_API_BASE_URL not set — skipping API ingest for %s", label
         )
+        if stats is not None:
+            stats.ingest_skipped_env_missing += 1
         return
 
     try:
@@ -347,6 +354,8 @@ def _ingest_set_to_api(
         final_tracks = payload.get("tracks") or []
         if not final_tracks:
             logger.warning("⚠️ No tracks to ingest for %s", label)
+            if stats is not None:
+                stats.ingest_skipped_no_tracks += 1
             return
 
         if stats is not None:
@@ -370,12 +379,23 @@ def _sync_set_to_spotify(
     set_name: str,
     label: str,
     g: GoogleAPI,
+    stats: CsvPipelineStats | None = None,
 ) -> None:
     logger = _prefect_logger()
 
-    if not os.environ.get("SPOTIPY_CLIENT_ID"):
+    spotify_env_ok = all(
+        os.environ.get(name)
+        for name in (
+            "SPOTIPY_CLIENT_ID",
+            "SPOTIPY_CLIENT_SECRET",
+            "SPOTIPY_REFRESH_TOKEN",
+        )
+    )
+    if not spotify_env_ok:
         logger.warning(
-            "SPOTIPY_CLIENT_ID not set — skipping Spotify sync for %s", label
+            "Spotify credentials incomplete (need SPOTIPY_CLIENT_ID, "
+            "SPOTIPY_CLIENT_SECRET, SPOTIPY_REFRESH_TOKEN) — skipping Spotify sync for %s",
+            label,
         )
         return
 
@@ -388,6 +408,8 @@ def _sync_set_to_spotify(
         sync_set_to_spotify(sp, set_name, tracks)
     except Exception as e:
         logger.error("❌ Spotify sync failed for %s: %s", label, e)
+        if stats is not None:
+            stats.spotify_failed += 1
 
 
 @task(name="process-csv-file")
@@ -431,6 +453,8 @@ def process_csv_file(
                 logger.warning(
                     "Could not read tracks from new sheet for stats: %s", track_exc
                 )
+                if stats is not None:
+                    stats.track_read_failed += 1
 
         try:
             archive_folder_id = g.drive.ensure_folder(year_folder_id, "Archive")
@@ -455,12 +479,15 @@ def process_csv_file(
                     set_name=base_name,
                     label=base_name,
                     g=g,
+                    stats=stats,
                 )
             else:
                 logger.warning(
                     "Could not extract date/venue from filename; skipping API ingest for %s",
                     base_name,
                 )
+                if stats is not None:
+                    stats.bad_filename_in_file += 1
         except Exception as move_exc:
             logger.error(
                 f"Failed to move original file to Archive subfolder: {move_exc}"
@@ -553,6 +580,39 @@ def process_new_csv_files_flow() -> None:
                 unrecognized_filename_skips=stats.skipped_bad_filename,
                 duplicate_csv_count=stats.duplicate_csv,
             )
+            aux_parts: list[str] = []
+            if stats.spotify_failed:
+                aux_parts.append(f"spotify_failed={stats.spotify_failed}")
+            if stats.bad_filename_in_file:
+                aux_parts.append(f"bad_filename_in_file={stats.bad_filename_in_file}")
+            if stats.ingest_skipped_no_tracks:
+                aux_parts.append(
+                    f"ingest_skipped_no_tracks={stats.ingest_skipped_no_tracks}"
+                )
+            if stats.ingest_skipped_env_missing:
+                aux_parts.append(
+                    f"ingest_skipped_env_missing={stats.ingest_skipped_env_missing}"
+                )
+            if stats.track_read_failed:
+                aux_parts.append(f"track_read_failed={stats.track_read_failed}")
+            if aux_parts:
+                evaluate_pipeline_run(
+                    run_id=run_id,
+                    repo="deejay-set-processor-dev",
+                    flow_name="process-new-csv-files",
+                    sets_imported=0,
+                    sets_failed=0,
+                    sets_skipped=0,
+                    total_tracks=0,
+                    failed_set_labels=[],
+                    api_ingest_success=True,
+                    sets_attempted=0,
+                    collection_update=False,
+                    direct_finding_text=(
+                        "CSV pipeline auxiliary signals: " + "; ".join(aux_parts)
+                    ),
+                    direct_severity="WARN",
+                )
         except Exception:
             logger.exception(
                 "Pipeline evaluation raised unexpectedly (should be best-effort)"
