@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/kaianolevine/deejay-cog/compare/v1.7.3...v1.8.0) (2026-03-26)
+
+
+### Features
+
+* adding observability ([9b846d3](https://github.com/kaianolevine/deejay-cog/commit/9b846d3c8062bf8722c0a5d622831093ecfc7c9d))
+
 ## [1.7.3](https://github.com/kaianolevine/deejay-cog/compare/v1.7.2...v1.7.3) (2026-03-24)
 
 
