@@ -8,6 +8,11 @@ pull:
   - prefect.deployments.steps.git_clone:
       repository: https://github.com/mini-app-polis/deejay-cog.git
       branch: main
+  - prefect.deployments.steps.pip_install_requirements:
+      requirements_file: null
+      pip_packages:
+        - ".[all]"
+      directory: /opt/prefect/deejay-cog-main
 
 deployments:
   - name: process-new-files
