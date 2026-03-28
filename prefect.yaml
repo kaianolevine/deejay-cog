@@ -8,7 +8,6 @@ pull:
   - prefect.deployments.steps.git_clone:
       repository: https://github.com/mini-app-polis/deejay-cog.git
       branch: main
-      access_token: "{{ prefect.blocks.secret.github-token }}"
 
 deployments:
   - name: process-new-files
