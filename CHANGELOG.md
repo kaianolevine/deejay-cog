@@ -1,3 +1,10 @@
+## [1.10.3](https://github.com/mini-app-polis/deejay-cog/compare/v1.10.2...v1.10.3) (2026-03-28)
+
+
+### Bug Fixes
+
+* public repos, no token ([1ef9a1f](https://github.com/mini-app-polis/deejay-cog/commit/1ef9a1f9d03c0eff2aca2450807614fb33ec2b65))
+
 ## [1.10.2](https://github.com/mini-app-polis/deejay-cog/compare/v1.10.1...v1.10.2) (2026-03-28)
 
 
