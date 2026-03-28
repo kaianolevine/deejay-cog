@@ -249,28 +249,12 @@ def create_spotify_playlist_for_file(
 
 def get_spotify_client() -> SpotifyAPI | None:
     """Return SpotifyAPI.from_env() or None if credentials are missing."""
-    import mini_app_polis.config as _mp_config
-
-    # mini_app_polis.config reads env vars at import time, so patch missing
-    # values directly onto the module before calling from_env()
-    if not _mp_config.SPOTIPY_CLIENT_ID:
-        _mp_config.SPOTIPY_CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
-    if not _mp_config.SPOTIPY_CLIENT_SECRET:
-        _mp_config.SPOTIPY_CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
-    if not _mp_config.SPOTIPY_REFRESH_TOKEN:
-        _mp_config.SPOTIPY_REFRESH_TOKEN = os.getenv("SPOTIPY_REFRESH_TOKEN")
-    if not _mp_config.SPOTIPY_REDIRECT_URI:
-        _mp_config.SPOTIPY_REDIRECT_URI = os.getenv(
-            "SPOTIPY_REDIRECT_URI", "http://127.0.0.1:8888/callback"
-        )
-
     if not os.getenv("SPOTIPY_CLIENT_ID") or not os.getenv("SPOTIPY_REFRESH_TOKEN"):
         log.warning(
             "SPOTIPY_CLIENT_ID or SPOTIPY_REFRESH_TOKEN not set; "
             "skipping Spotify client initialization.",
         )
         return None
-
     try:
         return SpotifyAPI.from_env()
     except Exception as e:
