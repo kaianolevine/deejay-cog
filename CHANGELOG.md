@@ -1,3 +1,16 @@
+# [1.9.0](https://github.com/kaianolevine/deejay-cog/compare/v1.8.1...v1.9.0) (2026-03-28)
+
+
+### Bug Fixes
+
+* build install tests ([108b3a5](https://github.com/kaianolevine/deejay-cog/commit/108b3a53e38ee90d68f84ebe7f4988f68782cebe))
+* pre commit ([35cb614](https://github.com/kaianolevine/deejay-cog/commit/35cb614dc59466525d3a3b0504895bd2f849f960))
+
+
+### Features
+
+* major restructure ([86e7a94](https://github.com/kaianolevine/deejay-cog/commit/86e7a94dfc1854d50367567cdc9494369486e279))
+
 ## [1.8.1](https://github.com/kaianolevine/deejay-cog/compare/v1.8.0...v1.8.1) (2026-03-26)
 
 
