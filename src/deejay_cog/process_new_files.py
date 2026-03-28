@@ -13,7 +13,11 @@ from deejay_cog.ingest_to_api import (
     build_ingest_payload,
     read_tracks_from_sheet,
 )
-from deejay_cog.spotify_sync import get_spotify_client, sync_set_to_spotify
+from deejay_cog.spotify_sync import (
+    get_spotify_client,
+    push_playlists_to_api,
+    sync_set_to_spotify,
+)
 
 log = logger_mod.get_logger()
 
@@ -406,6 +410,7 @@ def _sync_set_to_spotify(
 
         tracks = read_tracks_from_sheet(g, sheet_id)
         sync_set_to_spotify(sp, set_name, tracks)
+        push_playlists_to_api(sp)
     except Exception as e:
         logger.error("❌ Spotify sync failed for %s: %s", label, e)
         if stats is not None:

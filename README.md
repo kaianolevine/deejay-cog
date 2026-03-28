@@ -72,7 +72,8 @@ Spotify (for CSV pipeline sync via `process_new_files.py`):
 | **SPOTIPY_REFRESH_TOKEN** | OAuth refresh token for the Spotify account. Generated once via the Spotipy OAuth flow. |
 | **SPOTIPY_REDIRECT_URI** | OAuth redirect URI (default: `http://127.0.0.1:8888/callback`). |
 | **SPOTIFY_RADIO_PLAYLIST_ID** | Spotify playlist ID for the standing radio playlist. Skipped if unset. |
-| **SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH** | Output path for the Spotify playlist snapshot JSON (default: `v1/spotify/spotify_playlists.json`). |
+
+When **`KAIANO_API_BASE_URL`** is set (see below), the CSV pipeline also POSTs the full Spotify playlist catalog to the API after each successful set sync so the site’s playlist data stays current (no local JSON snapshot).
 
 API and Prefect:
 

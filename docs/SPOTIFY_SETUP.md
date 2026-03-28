@@ -70,7 +70,8 @@ In your GitHub repo settings, add the following:
 |----------|-------|
 | `SPOTIPY_REDIRECT_URI` | `http://127.0.0.1:8888/callback` |
 | `SPOTIFY_RADIO_PLAYLIST_ID` | Spotify playlist ID for the radio playlist |
-| `SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH` | `v1/spotify/spotify_playlists.json` (or leave unset to use default) |
+
+The full Spotify playlist catalog is pushed to deejay-marvel-api when **`KAIANO_API_BASE_URL`** is set (see `docs/CONFIGURATION.md`); no separate snapshot path is required.
 
 To find a playlist ID: open the playlist in Spotify, click the three-dot
 menu → Share → Copy link. The ID is the string after `/playlist/` and

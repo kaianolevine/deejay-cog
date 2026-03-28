@@ -1,14 +1,12 @@
 """Spotify sync for DJ sets sourced from Google Sheets (CSV pipeline).
 
 Updates the radio playlist and per-set playlists from sheet track rows, and
-exposes helpers to write a JSON snapshot of all Spotify playlists for the site.
+pushes a full Spotify playlist snapshot to the Kaiano API when configured.
 """
 
 from __future__ import annotations
 
-import json
 import os
-from datetime import UTC, datetime
 from typing import Any
 
 from mini_app_polis import logger as logger_mod
@@ -17,10 +15,6 @@ from mini_app_polis.spotify import SpotifyAPI
 log = logger_mod.get_logger()
 
 # Env-driven config (mini_app_polis loads dotenv when config is first imported).
-SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH = os.getenv(
-    "SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH",
-    "v1/spotify/spotify_playlists.json",
-)
 SPOTIFY_RADIO_PLAYLIST_ID = os.getenv("SPOTIFY_RADIO_PLAYLIST_ID")
 
 DEFAULT_PLAYLIST_DESCRIPTION = (
@@ -28,10 +22,6 @@ DEFAULT_PLAYLIST_DESCRIPTION = (
     "Spreadsheets of history and song-not-found logs can be found at "
     "www.kaianolevine.com/dj-marvel"
 )
-
-
-def _now_utc_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _first_attr(obj: Any, names: list[str]) -> Any:
@@ -133,34 +123,83 @@ def fetch_all_playlists(sp: Any) -> list[dict]:
     return items
 
 
-def write_playlist_snapshot_json(sp: Any) -> str | None:
-    """Write a JSON snapshot of all playlists to disk and return the output path."""
-    json_output_path = SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH
+def push_playlists_to_api(sp: Any) -> int | None:
+    """
+    Fetch all playlists from the Spotify account and push a full snapshot
+    to POST /v1/spotify/playlists via KaianoApiClient.
+
+    The API upserts all playlists using snapshot_id to skip unchanged rows.
+    Returns the number of playlists upserted, or None if the API call was
+    skipped (KAIANO_API_BASE_URL not set) or failed.
+
+    Skips gracefully if KAIANO_API_BASE_URL is not set.
+    """
+    if not os.getenv("KAIANO_API_BASE_URL"):
+        log.warning(
+            "KAIANO_API_BASE_URL not set — skipping Spotify playlist push to API",
+        )
+        return None
+
+    try:
+        from mini_app_polis.api import KaianoApiClient  # type: ignore
+        from mini_app_polis.api.errors import KaianoApiError  # type: ignore
+    except Exception as e:
+        log.error("Kaiano API client not available; skipping playlist push: %s", e)
+        return None
 
     raw_playlists = fetch_all_playlists(sp)
     normalized = [
         _normalize_playlist_item(p) for p in raw_playlists if isinstance(p, dict)
     ]
 
-    snapshot = {
-        "generated_at": _now_utc_iso(),
-        "playlist_count": len(normalized),
-        "playlists": sorted(
-            normalized, key=lambda x: (x.get("name", "") or "").lower()
-        ),
+    payload = {
+        "playlists": [
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "url": p["url"],
+                "uri": p["uri"],
+                "type": p["type"],
+                "public": p["public"] if p["public"] is not None else True,
+                "collaborative": p["collaborative"]
+                if p["collaborative"] is not None
+                else False,
+                "snapshot_id": p["snapshot_id"],
+                "tracks_total": p["tracks_total"]
+                if p["tracks_total"] is not None
+                else 0,
+                "owner_id": p["owner"]["id"],
+                "owner_name": p["owner"].get("display_name"),
+            }
+            for p in normalized
+            if p.get("id") and p.get("name")
+        ]
     }
 
     try:
-        os.makedirs(os.path.dirname(json_output_path) or ".", exist_ok=True)
-        with open(json_output_path, "w", encoding="utf-8") as f:
-            json.dump(snapshot, f, ensure_ascii=False, indent=2)
-        return json_output_path
-    except Exception:
-        log.exception(
-            "Failed to write playlist snapshot JSON to: %s",
-            json_output_path,
-        )
+        client = KaianoApiClient.from_env()
+        response = client.post("/v1/spotify/playlists", payload)
+    except KaianoApiError as e:
+        log.error("Spotify playlist push to API failed: %s", e)
         return None
+
+    data = response.get("data") if isinstance(response, dict) else None
+    if not isinstance(data, dict):
+        log.error("Spotify playlist API response missing data: %s", response)
+        return None
+
+    upserted = data.get("upserted")
+    unchanged = data.get("unchanged", 0)
+    if upserted is None:
+        log.error("Spotify playlist API response missing upserted count: %s", response)
+        return None
+
+    log.info(
+        "✅ Spotify playlists pushed to API: %s upserted, %s unchanged",
+        upserted,
+        unchanged,
+    )
+    return int(upserted)
 
 
 def update_spotify_radio_playlist(

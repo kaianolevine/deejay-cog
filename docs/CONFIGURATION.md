@@ -168,10 +168,10 @@ This document lists every environment variable and config value used by **deejay
 | | |
 |--|--|
 | **Required** | No — API ingest and pipeline evaluation are both skipped if unset. |
-| **Description** | Base URL for the deejay-marvel-api instance. Used to POST new sets and live history plays. Also gates post-run pipeline evaluation: all four pipeline scripts check `KAIANO_API_BASE_URL` before calling `evaluate_pipeline_run` (with `ANTHROPIC_API_KEY` for Claude-backed runs). |
+| **Description** | Base URL for the deejay-marvel-api instance. Used to POST new sets, live history plays, and the full Spotify playlist catalog (`POST /v1/spotify/playlists` from `spotify_sync.push_playlists_to_api` after CSV Spotify sync). Also gates post-run pipeline evaluation: all four pipeline scripts check `KAIANO_API_BASE_URL` before calling `evaluate_pipeline_run` (with `ANTHROPIC_API_KEY` for Claude-backed runs). |
 | **Example** | `https://your-api.railway.app` |
 | **Source** | GitHub Actions: **variable** `KAIANO_API_BASE_URL`. Locally: `.env`. |
-| **Used by** | `process_new_files.py`, `update_deejay_set_collection.py`, `generate_summaries.py`, `ingest_live_history.py` (API ingest and evaluation gating). |
+| **Used by** | `process_new_files.py`, `update_deejay_set_collection.py`, `generate_summaries.py`, `ingest_live_history.py` (API ingest, Spotify playlist push, and evaluation gating). |
 
 ---
 
@@ -253,17 +253,6 @@ This document lists every environment variable and config value used by **deejay
 
 ---
 
-### SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH
-
-| | |
-|--|--|
-| **Required** | No (defaults to `v1/spotify/spotify_playlists.json`) |
-| **Description** | File path where the full Spotify playlist snapshot JSON is written. Consumed by kaiano-api to render the playlist list on the website. |
-| **Source** | GitHub Actions: **variable** `SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH`. Locally: `.env`. |
-| **Used by** | `spotify_sync.py` |
-
----
-
 ## Prefect
 
 ### PREFECT_API_KEY
@@ -340,7 +329,7 @@ This document lists every environment variable and config value used by **deejay
 | ALLOWED_HEADERS | Yes (summaries) | kaiano config | generate_summaries |
 | desiredOrder | No | kaiano config | generate_summaries |
 | DEEJAY_SET_COLLECTION_JSON_PATH | No | kaiano config / default | update_deejay_set_collection |
-| KAIANO_API_BASE_URL | No | GitHub variable / `.env` | process_new_files, update_deejay_set_collection, generate_summaries, ingest_live_history (API ingest + evaluation gating) |
+| KAIANO_API_BASE_URL | No | GitHub variable / `.env` | process_new_files, update_deejay_set_collection, generate_summaries, ingest_live_history (API ingest, Spotify playlist catalog push, evaluation gating) |
 | KAIANO_API_OWNER_ID | No | GitHub variable / `.env` | process_new_files, ingest_live_history |
 | OWNER_ID | No | GitHub variable / `.env` | process_new_files, ingest_live_history |
 | SPOTIPY_CLIENT_ID | Yes (Spotify) | GitHub secret / `.env` | spotify_sync, process_new_files |
@@ -348,7 +337,6 @@ This document lists every environment variable and config value used by **deejay
 | SPOTIPY_REFRESH_TOKEN | Yes (Spotify) | GitHub secret / `.env` | spotify_sync, process_new_files |
 | SPOTIPY_REDIRECT_URI | No | GitHub variable / `.env` | spotify_sync |
 | SPOTIFY_RADIO_PLAYLIST_ID | No | GitHub variable / `.env` | spotify_sync, process_new_files |
-| SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH | No | GitHub variable / `.env` | spotify_sync |
 | PREFECT_API_KEY | Yes (flows) | GitHub secret / `.env` | flow scripts (Prefect login) |
 | PREFECT_API_URL | Yes (flows) | GitHub variable / `.env` | flow scripts (Prefect login) |
 | PREFECT_ACCOUNT_SLUG | Yes (workflows) | GitHub variable | workflows (Prefect login) |

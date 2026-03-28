@@ -1,4 +1,3 @@
-import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
@@ -66,35 +65,123 @@ def test_fetch_all_playlists_no_client() -> None:
     assert ss.fetch_all_playlists(sp) == []
 
 
-def test_write_playlist_snapshot_json_writes_valid_json(tmp_path) -> None:
-    out_path = tmp_path / "snap.json"
-    playlists = [{"id": "x", "name": "Zed"}]
+def test_push_playlists_to_api_skips_when_kaiano_base_url_missing(
+    monkeypatch, caplog
+) -> None:
+    import logging
 
-    fake_sp = object()
+    monkeypatch.delenv("KAIANO_API_BASE_URL", raising=False)
+    caplog.set_level(logging.WARNING)
+    assert ss.push_playlists_to_api(object()) is None
+    assert "KAIANO_API_BASE_URL" in caplog.text
+
+
+def test_push_playlists_to_api_posts_expected_payload(monkeypatch) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    raw = [
+        {
+            "id": "pid",
+            "name": "Mix",
+            "uri": "spotify:playlist:pid",
+            "type": "playlist",
+            "public": True,
+            "collaborative": False,
+            "snapshot_id": "snap",
+            "external_urls": {"spotify": "https://open.spotify.com/playlist/pid"},
+            "tracks": {"total": 10},
+            "owner": {"id": "oid", "display_name": "Owner"},
+        }
+    ]
+    mock_client = MagicMock()
+    mock_client.post.return_value = {"data": {"upserted": 1, "unchanged": 2}}
+    mock_cls = MagicMock(return_value=mock_client)
+    mock_cls.from_env = MagicMock(return_value=mock_client)
+
     with (
-        patch.object(ss, "fetch_all_playlists", return_value=playlists),
-        patch.object(ss, "_normalize_playlist_item", side_effect=lambda p: p),
+        patch.object(ss, "fetch_all_playlists", return_value=raw),
+        patch("mini_app_polis.api.KaianoApiClient", mock_cls),
     ):
-        ss.SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH = str(out_path)
-        path = ss.write_playlist_snapshot_json(fake_sp)
+        out = ss.push_playlists_to_api(object())
 
-    assert path == str(out_path)
-    data = json.loads(out_path.read_text(encoding="utf-8"))
-    assert data["playlist_count"] == 1
-    assert len(data["playlists"]) == 1
-    assert "generated_at" in data
+    assert out == 1
+    mock_client.post.assert_called_once()
+    path, payload = mock_client.post.call_args[0]
+    assert path == "/v1/spotify/playlists"
+    assert len(payload["playlists"]) == 1
+    pl = payload["playlists"][0]
+    assert pl == {
+        "id": "pid",
+        "name": "Mix",
+        "url": "https://open.spotify.com/playlist/pid",
+        "uri": "spotify:playlist:pid",
+        "type": "playlist",
+        "public": True,
+        "collaborative": False,
+        "snapshot_id": "snap",
+        "tracks_total": 10,
+        "owner_id": "oid",
+        "owner_name": "Owner",
+    }
 
 
-def test_write_playlist_snapshot_json_returns_none_on_write_error(tmp_path) -> None:
-    bad_path = tmp_path / "nope" / "x.json"
-    fake_sp = object()
+def test_push_playlists_to_api_defaults_public_collaborative_tracks_total(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    raw = [
+        {
+            "id": "p1",
+            "name": "A",
+            "uri": "",
+            "type": "playlist",
+            "public": None,
+            "collaborative": None,
+            "snapshot_id": "",
+            "tracks": {},
+            "owner": {"id": "o1"},
+        }
+    ]
+    mock_client = MagicMock()
+    mock_client.post.return_value = {"data": {"upserted": 0, "unchanged": 1}}
+    mock_cls = MagicMock(return_value=mock_client)
+    mock_cls.from_env = MagicMock(return_value=mock_client)
+
+    with (
+        patch.object(ss, "fetch_all_playlists", return_value=raw),
+        patch("mini_app_polis.api.KaianoApiClient", mock_cls),
+    ):
+        out = ss.push_playlists_to_api(object())
+
+    assert out == 0
+    pl = mock_client.post.call_args[0][1]["playlists"][0]
+    assert pl["public"] is True
+    assert pl["collaborative"] is False
+    assert pl["tracks_total"] == 0
+
+
+def test_push_playlists_to_api_returns_none_on_kaiano_api_error(
+    monkeypatch, caplog
+) -> None:
+    import logging
+
+    from mini_app_polis.api.errors import KaianoApiError
+
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
+    mock_client = MagicMock()
+    mock_client.post.side_effect = KaianoApiError(
+        502, "upstream failed", "/v1/spotify/playlists"
+    )
+    mock_cls = MagicMock(return_value=mock_client)
+    mock_cls.from_env = MagicMock(return_value=mock_client)
+
+    caplog.set_level(logging.ERROR)
     with (
         patch.object(ss, "fetch_all_playlists", return_value=[]),
-        patch.object(ss, "_normalize_playlist_item", side_effect=lambda p: p),
+        patch("mini_app_polis.api.KaianoApiClient", mock_cls),
     ):
-        ss.SPOTIFY_PLAYLIST_SNAPSHOT_JSON_PATH = str(bad_path)
-        with patch("builtins.open", side_effect=OSError("fail")):
-            assert ss.write_playlist_snapshot_json(fake_sp) is None
+        assert ss.push_playlists_to_api(object()) is None
+
+    assert "Spotify playlist push to API failed" in caplog.text
 
 
 def test_update_spotify_radio_playlist_adds_and_trims() -> None:
