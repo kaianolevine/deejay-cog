@@ -567,6 +567,28 @@ def process_new_csv_files_flow() -> None:
         stats.skipped_bad_filename,
     )
 
+    # Always sync Spotify playlists regardless of whether new files were processed
+    spotify_env_ok = all(
+        os.environ.get(name)
+        for name in (
+            "SPOTIPY_CLIENT_ID",
+            "SPOTIPY_CLIENT_SECRET",
+            "SPOTIPY_REFRESH_TOKEN",
+        )
+    )
+    if spotify_env_ok:
+        try:
+            sp = get_spotify_client()
+            if sp is not None:
+                pushed = push_playlists_to_api(sp)
+                logger.info(
+                    "✅ Spotify playlist sync complete: %s playlists pushed",
+                    pushed,
+                )
+        except Exception as e:
+            logger.error("❌ Spotify playlist sync failed: %s", e)
+            stats.spotify_failed += 1
+
     if os.environ.get("ANTHROPIC_API_KEY") and os.environ.get("KAIANO_API_BASE_URL"):
         run_id = os.environ.get("GITHUB_RUN_ID", "local-run")
         try:
