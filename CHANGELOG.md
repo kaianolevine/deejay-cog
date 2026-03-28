@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/mini-app-polis/deejay-cog/compare/v1.9.4...v1.10.0) (2026-03-28)
+
+
+### Features
+
+* updating for spotify api posting ([e2b7c49](https://github.com/mini-app-polis/deejay-cog/commit/e2b7c4931d339abe0c1e8d3fbcef40b0af4e4937))
+
 ## [1.9.4](https://github.com/mini-app-polis/deejay-cog/compare/v1.9.3...v1.9.4) (2026-03-28)
 
 
