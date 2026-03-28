@@ -3,11 +3,12 @@ import os
 import pathlib
 import re
 
-import mini_app_polis.config as config
 from evaluator_cog.flows.pipeline_eval import evaluate_pipeline_run
 from mini_app_polis import logger as logger_mod
 from mini_app_polis.google import GoogleAPI
 from prefect import flow, get_run_logger
+
+import deejay_cog.config as config
 
 log = logger_mod.get_logger()
 

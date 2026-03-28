@@ -3,12 +3,12 @@ import os
 import re
 from dataclasses import dataclass, field
 
-import mini_app_polis.config as config
 from evaluator_cog.flows.pipeline_eval import evaluate_pipeline_run
 from mini_app_polis import logger as logger_mod
 from mini_app_polis.google import GoogleAPI
 from prefect import flow, get_run_logger, task
 
+import deejay_cog.config as config
 from deejay_cog.ingest_to_api import (
     build_ingest_payload,
     read_tracks_from_sheet,

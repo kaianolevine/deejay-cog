@@ -23,6 +23,7 @@ def _install_mini_app_polis_stubs() -> None:
         "CSV_SOURCE_FOLDER_ID",
         "SUMMARY_FOLDER_NAME",
         "DEEJAY_SET_COLLECTION_JSON_PATH",
+        "TIMEZONE",
     ]:
         if not hasattr(_config, name):
             setattr(_config, name, "")
