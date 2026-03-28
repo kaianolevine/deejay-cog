@@ -201,7 +201,9 @@ def test_ingest_set_to_api_posts_payload(monkeypatch):
             return client
 
     sys.modules["mini_app_polis.api"] = SimpleNamespace(KaianoApiClient=FakeClient)
-    sys.modules["mini_app_polis.api.errors"] = SimpleNamespace(KaianoApiError=FakeApiError)
+    sys.modules["mini_app_polis.api.errors"] = SimpleNamespace(
+        KaianoApiError=FakeApiError
+    )
 
     g = SimpleNamespace()
 
@@ -253,7 +255,9 @@ def test_ingest_set_to_api_logs_error_on_api_error(monkeypatch):
             raise FakeApiError("nope")
 
     sys.modules["mini_app_polis.api"] = SimpleNamespace(KaianoApiClient=FakeClient)
-    sys.modules["mini_app_polis.api.errors"] = SimpleNamespace(KaianoApiError=FakeApiError)
+    sys.modules["mini_app_polis.api.errors"] = SimpleNamespace(
+        KaianoApiError=FakeApiError
+    )
 
     g = SimpleNamespace()
 

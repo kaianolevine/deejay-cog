@@ -26,7 +26,9 @@ client_secret = os.getenv("SPOTIPY_CLIENT_SECRET")
 redirect_uri = os.getenv("SPOTIPY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
 
 if not all([client_id, client_secret]):
-    print("❌ SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET must be set in your .env file.")
+    print(
+        "❌ SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET must be set in your .env file."
+    )
     raise SystemExit(1)
 
 sp_oauth = SpotifyOAuth(

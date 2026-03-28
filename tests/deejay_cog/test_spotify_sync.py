@@ -197,7 +197,9 @@ def test_get_spotify_client_returns_none_when_client_id_missing(monkeypatch) -> 
     m_api.from_env.assert_not_called()
 
 
-def test_get_spotify_client_returns_none_when_refresh_token_missing(monkeypatch) -> None:
+def test_get_spotify_client_returns_none_when_refresh_token_missing(
+    monkeypatch,
+) -> None:
     monkeypatch.setenv("SPOTIPY_CLIENT_ID", "cid")
     monkeypatch.delenv("SPOTIPY_REFRESH_TOKEN", raising=False)
     with patch.object(ss, "SpotifyAPI") as m_api:
@@ -246,7 +248,9 @@ def test_sync_set_to_spotify_skips_tracks_missing_artist_or_title(monkeypatch) -
     ]
     with (
         patch.object(ss, "update_spotify_radio_playlist") as m_radio,
-        patch.object(ss, "create_spotify_playlist_for_file", return_value="x") as m_create,
+        patch.object(
+            ss, "create_spotify_playlist_for_file", return_value="x"
+        ) as m_create,
     ):
         ss.sync_set_to_spotify(sp, "2024-01-01", tracks)
     sp.search_track.assert_called_once_with("A", "T")

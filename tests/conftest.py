@@ -32,12 +32,22 @@ def _install_mini_app_polis_stubs() -> None:
     import mini_app_polis.logger as _logger_mod  # noqa: F401
 
     if not hasattr(_logger_mod, "get_logger"):
+
         class _DummyLogger:
-            def info(self, *_args, **_kwargs) -> None: return None
-            def debug(self, *_args, **_kwargs) -> None: return None
-            def warning(self, *_args, **_kwargs) -> None: return None
-            def error(self, *_args, **_kwargs) -> None: return None
-            def exception(self, *_args, **_kwargs) -> None: return None
+            def info(self, *_args, **_kwargs) -> None:
+                return None
+
+            def debug(self, *_args, **_kwargs) -> None:
+                return None
+
+            def warning(self, *_args, **_kwargs) -> None:
+                return None
+
+            def error(self, *_args, **_kwargs) -> None:
+                return None
+
+            def exception(self, *_args, **_kwargs) -> None:
+                return None
 
         _logger_mod.get_logger = lambda: _DummyLogger()  # type: ignore[attr-defined]
 
@@ -45,22 +55,30 @@ def _install_mini_app_polis_stubs() -> None:
     import mini_app_polis.google as _google_mod  # noqa: F401
 
     if not hasattr(_google_mod, "GoogleAPI"):
+
         class GoogleAPI:  # pragma: no cover
             pass
+
         _google_mod.GoogleAPI = GoogleAPI  # type: ignore[attr-defined]
 
     # ── mini_app_polis.api ───────────────────────────────────────────────────
     import mini_app_polis.api as _api_mod  # noqa: F401
 
     if not hasattr(_api_mod, "KaianoApiClient"):
+
         class KaianoApiError(Exception):
             pass
 
         class KaianoApiClient:
-            def __init__(self, *_args, **_kwargs) -> None: return None
-            def post(self, *_args, **_kwargs) -> dict: return {}
+            def __init__(self, *_args, **_kwargs) -> None:
+                return None
+
+            def post(self, *_args, **_kwargs) -> dict:
+                return {}
+
             @classmethod
-            def from_env(cls) -> "KaianoApiClient": return cls()
+            def from_env(cls) -> "KaianoApiClient":
+                return cls()
 
         _api_mod.KaianoApiClient = KaianoApiClient  # type: ignore[attr-defined]
         _api_mod.KaianoApiError = KaianoApiError  # type: ignore[attr-defined]
