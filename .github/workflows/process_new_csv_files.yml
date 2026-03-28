@@ -29,6 +29,7 @@ jobs:
       SPOTIPY_REDIRECT_URI: ${{ vars.SPOTIPY_REDIRECT_URI }}
       SPOTIFY_RADIO_PLAYLIST_ID: ${{ vars.SPOTIFY_RADIO_PLAYLIST_ID }}
       KAIANO_API_REPO_TOKEN: ${{ secrets.KAIANO_API_REPO_TOKEN }}
+      CSV_SOURCE_FOLDER_ID: "1t4d_8lMC3ZJfSyainbpwInoDta7n69hC"
 
     steps:
       - name: Checkout repo
