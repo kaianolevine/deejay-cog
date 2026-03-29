@@ -1,3 +1,10 @@
+## [1.11.1](https://github.com/mini-app-polis/deejay-cog/compare/v1.11.0...v1.11.1) (2026-03-29)
+
+
+### Bug Fixes
+
+* deployment prefect fix ([45fc605](https://github.com/mini-app-polis/deejay-cog/commit/45fc605b611b2816bb5b00692de96e1e92947aec))
+
 # [1.11.0](https://github.com/mini-app-polis/deejay-cog/compare/v1.10.14...v1.11.0) (2026-03-29)
 
 
