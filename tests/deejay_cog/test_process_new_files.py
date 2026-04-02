@@ -349,3 +349,45 @@ def test_process_non_csv_file_moves_to_year_folder():
     mock_drive.move_file.assert_called_once_with(
         "file-1", new_parent_id="year-folder-id", remove_from_parents=True
     )
+
+
+# ── Failure path (TEST-003) ───────────────────────────────────────────────────
+
+
+def test_main_flow_continues_after_single_file_failure(monkeypatch) -> None:
+    """Main pipeline loop does not abort when process_csv_file raises — continues to next."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("KAIANO_API_BASE_URL", "")
+
+    file_1 = SimpleNamespace(id="f-1", name="2024-01-01_Failing Venue.csv")
+    file_2 = SimpleNamespace(id="f-2", name="2024-02-01_Good Venue.csv")
+
+    drive = SimpleNamespace(list_files=MagicMock(return_value=[file_1, file_2]))
+    g = SimpleNamespace(drive=drive)
+
+    call_count = 0
+
+    def _fake_process_csv(g_api, meta, year, stats):
+        nonlocal call_count
+        call_count += 1
+        if meta["id"] == "f-1":
+            raise RuntimeError("simulated failure")
+        stats.sets_imported += 1
+        return "imported"
+
+    with (
+        patch.object(process_new_files.GoogleAPI, "from_env", return_value=g),
+        patch.object(process_new_files, "normalize_prefixes_in_source"),
+        patch.object(
+            process_new_files,
+            "process_csv_file",
+            side_effect=_fake_process_csv,
+        ),
+        patch.object(process_new_files, "config") as mock_cfg,
+    ):
+        mock_cfg.CSV_SOURCE_FOLDER_ID = "src-folder"
+        with prefect_test_harness():
+            process_new_files.main()
+
+    # Both valid files were attempted — the failing one did not abort the loop
+    assert call_count == 2

@@ -24,6 +24,7 @@ log = logger_mod.get_logger()
 os.environ.setdefault("CSV_SOURCE_FOLDER_ID", "1t4d_8lMC3ZJfSyainbpwInoDta7n69hC")
 os.environ.setdefault("DJ_SETS_FOLDER_ID", "1A0tKQ2DBXI1Bt9h--olFwnBNne3am-rL")
 
+
 def _prefect_logger():
     try:
         return get_run_logger()
@@ -159,6 +160,7 @@ def normalize_prefixes_in_source(drive) -> None:
 
 # --- Utility: remove summary file for a given year ---
 def remove_summary_file_for_year(g: GoogleAPI, year: str) -> None:
+    """Remove the summary sheet for the given year from Drive if it exists."""
     try:
         summary_folder_id = g.drive.ensure_folder(config.DJ_SETS_FOLDER_ID, "Summary")
         summary_name = f"{year} Summary"
@@ -179,6 +181,7 @@ def remove_summary_file_for_year(g: GoogleAPI, year: str) -> None:
 
 # --- Utility: check for duplicate base filename in a folder ---
 def file_exists_with_base_name(g: GoogleAPI, folder_id: str, base_name: str) -> bool:
+    """Return True if a file with the given base name exists in the folder."""
     try:
         candidates = g.drive.list_files(folder_id, include_folders=False, trashed=False)
         for f in candidates:
@@ -190,6 +193,7 @@ def file_exists_with_base_name(g: GoogleAPI, folder_id: str, base_name: str) -> 
 
 
 def rename_file_as_duplicate(g: GoogleAPI, file_id: str, filename: str) -> None:
+    """Rename a file with a possible_duplicate_ prefix to flag it for review."""
     try:
         new_name = f"possible_duplicate_{filename}"
         g.drive.rename_file(file_id, new_name)
@@ -204,6 +208,7 @@ def process_non_csv_file(
     year: str,
     stats: CsvPipelineStats | None = None,
 ) -> None:
+    """Move a non-CSV file that starts with a year into the correct year folder."""
     filename = file_metadata["name"]
     file_id = file_metadata["id"]
     log.info(f"\n📄 Moving non-CSV file that starts with year: {filename}")
@@ -560,7 +565,15 @@ def process_new_csv_files_flow() -> None:
 
         # At this point we only process CSVs
         stats.sets_attempted += 1
-        process_csv_file(g, file_metadata, year, stats)
+        try:
+            process_csv_file(g, file_metadata, year, stats)
+        except Exception as e:
+            logger.error(
+                "❌ Unexpected error processing %s — continuing to next file: %s",
+                filename,
+                e,
+            )
+            stats.sets_failed += 1
 
     logger.info(
         "✅ Done: %d CSVs, %d non-CSV files, %d skipped.",

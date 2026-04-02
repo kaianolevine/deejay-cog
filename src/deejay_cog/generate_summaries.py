@@ -64,10 +64,7 @@ def _handle_flow_failure(flow, flow_run, state) -> None:
 )
 def generate_summaries_flow() -> None:
     """Generate the next missing summary for a year."""
-    try:
-        logger = get_run_logger()
-    except Exception:
-        logger = log
+    logger = _prefect_logger()
 
     logger.info("🚀 Starting generate_next_missing_summary()")
     g = GoogleAPI.from_env()

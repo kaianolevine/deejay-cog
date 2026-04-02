@@ -41,6 +41,9 @@ source = ["src"]
 fail_under = 0
 show_missing = true
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 88
