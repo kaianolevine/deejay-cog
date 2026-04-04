@@ -10,6 +10,17 @@ Env vars (see config.py for defaults):
   MUSIC_TAGGING_OUTPUT_FOLDER_ID  – Drive folder to write identified files to
   ACOUSTID_API_KEY                – AcoustID application API key
   MAX_UPLOADS_PER_RUN             – optional ceiling (default 200)
+
+System dependencies (must be present in the runtime environment):
+  ffmpeg   – required by pyacoustid for audio decoding
+  fpcalc   – required by pyacoustid for audio fingerprinting
+             (provided by the chromaprint / libchromaprint-tools package)
+
+  These are NOT standard Railway/Python deps and must be installed separately.
+  On Ubuntu/Debian: sudo apt-get install -y ffmpeg libchromaprint-tools
+  When registering the retag-music deployment, confirm both binaries are
+  available in the Railway environment (e.g. via a custom Dockerfile or
+  nixpacks config). The other deejay-cog flows do not require these.
 """
 
 from __future__ import annotations
@@ -338,6 +349,7 @@ def retag_music_flow() -> RetagSummary:
       - write corrected tags and rename
       - move to MUSIC_TAGGING_OUTPUT_FOLDER_ID on high confidence
       - update in place on low/no confidence
+    IMPORTANT: This flow requires system binaries `ffmpeg` and `fpcalc`; see module docstring.
     """
     logger = _prefect_logger()
 

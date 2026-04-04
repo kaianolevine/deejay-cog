@@ -4,6 +4,23 @@ This document lists every environment variable and config value used by **deejay
 
 ---
 
+## System dependencies
+
+The `retag-music` flow (`retag_music.py`) requires two runtime binaries that are not Python packages:
+
+- `ffmpeg` (used by `pyacoustid` for audio decoding)
+- `fpcalc` (used by `pyacoustid` for audio fingerprinting; provided by `chromaprint` / `libchromaprint-tools`)
+
+Install on Ubuntu/Debian:
+
+```bash
+sudo apt-get install -y ffmpeg libchromaprint-tools
+```
+
+These dependencies are specific to `retag-music` and must be explicitly provisioned in the runtime environment when registering that deployment (for example via a custom Dockerfile or `nixpacks` config on Railway). No other deejay-cog flow requires these binaries.
+
+---
+
 ## Environment variables
 
 ### GOOGLE_CREDENTIALS_JSON
@@ -253,6 +270,50 @@ This document lists every environment variable and config value used by **deejay
 
 ---
 
+### ACOUSTID_API_KEY
+
+| | |
+|--|--|
+| **Required** | Yes (retag-music flow) |
+| **Description** | AcoustID application API key used to fingerprint and identify audio files via AcoustID/MusicBrainz. |
+| **Source** | GitHub Actions / Railway env / `.env`. |
+| **Used by** | `retag_music.py` |
+
+---
+
+### RETAG_MIN_CONFIDENCE
+
+| | |
+|--|--|
+| **Required** | No (defaults to `0.90`) |
+| **Description** | Minimum identification confidence required before treating a match as high-confidence and moving to destination. |
+| **Source** | GitHub Actions / Railway env / `.env`. |
+| **Used by** | `retag_music.py` |
+
+---
+
+### RETAG_MAX_CANDIDATES
+
+| | |
+|--|--|
+| **Required** | No (defaults to `5`) |
+| **Description** | Maximum AcoustID candidates to inspect when selecting a match. |
+| **Source** | GitHub Actions / Railway env / `.env`. |
+| **Used by** | `retag_music.py` |
+
+---
+
+### MAX_UPLOADS_PER_RUN
+
+| | |
+|--|--|
+| **Required** | No (defaults to `200`) |
+| **Description** | Per-run ceiling for uploads performed by the retag-music flow. |
+| **Source** | GitHub Actions / Railway env / `.env`. |
+| **Used by** | `retag_music.py` |
+
+---
+
 ## Prefect
 
 ### PREFECT_API_KEY
@@ -337,6 +398,10 @@ This document lists every environment variable and config value used by **deejay
 | SPOTIPY_REFRESH_TOKEN | Yes (Spotify) | GitHub secret / `.env` | spotify_sync, process_new_files |
 | SPOTIPY_REDIRECT_URI | No | GitHub variable / `.env` | spotify_sync |
 | SPOTIFY_RADIO_PLAYLIST_ID | No | GitHub variable / `.env` | spotify_sync, process_new_files |
+| ACOUSTID_API_KEY | Yes (retag-music) | GitHub variable / Railway env / `.env` | retag_music |
+| RETAG_MIN_CONFIDENCE | No | GitHub variable / Railway env / `.env` | retag_music |
+| RETAG_MAX_CANDIDATES | No | GitHub variable / Railway env / `.env` | retag_music |
+| MAX_UPLOADS_PER_RUN | No | GitHub variable / Railway env / `.env` | retag_music |
 | PREFECT_API_KEY | Yes (flows) | GitHub secret / `.env` | flow scripts (Prefect login) |
 | PREFECT_API_URL | Yes (flows) | GitHub variable / `.env` | flow scripts (Prefect login) |
 | PREFECT_ACCOUNT_SLUG | Yes (workflows) | GitHub variable | workflows (Prefect login) |

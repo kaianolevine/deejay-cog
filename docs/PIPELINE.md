@@ -39,12 +39,13 @@ This document describes the full pipeline from CSV drop to JSON output and where
 
 ## Orchestration
 
-All four pipeline entrypoints are Prefect flows. Each run is visible in Prefect Cloud with flow- and task-level logs (where tasks exist) and retry tracking. All four flows register **`on_failure`** and **`on_crashed`** hooks that post a **direct finding** to the evaluator API when the flow fails or crashes before completion.
+All five pipeline entrypoints are Prefect flows. Each run is visible in Prefect Cloud with flow- and task-level logs (where tasks exist) and retry tracking. All five flows register **`on_failure`** and **`on_crashed`** hooks that post a **direct finding** to the evaluator API when the flow fails or crashes before completion.
 
 - **`process-new-csv-files`** (`process_new_files.py`) — **Tasks:** `process-csv-file` (per CSV: download → normalize → upload → archive → ingest / Spotify); `normalize-csv`; `upload-to-sheets`; `ingest-to-api` (retries: 2, delay: 30s); `sync-to-spotify`.
 - **`update-dj-set-collection`** (`update_deejay_set_collection.py`) — No named tasks; single flow body.
 - **`generate-summaries`** (`generate_summaries.py`) — No named tasks; single flow body.
 - **`ingest-live-history`** (`ingest_live_history.py`) — **Tasks:** `process-m3u-file`.
+- **`retag-music`** (`retag_music.py`) — **Tasks:** `retag-music-file`. Requires runtime system binaries `ffmpeg` and `fpcalc` (from `libchromaprint-tools`); these are specific to this flow.
 
 View runs: [app.prefect.cloud](https://app.prefect.cloud)
 
