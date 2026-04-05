@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/mini-app-polis/deejay-cog/compare/v1.12.1...v1.13.0) (2026-04-05)
+
+
+### Features
+
+* fixing error gaps from standards findings ([e0c9345](https://github.com/mini-app-polis/deejay-cog/commit/e0c9345e833e306078e1e1ddb3a486dde9ad33d5))
+
 ## [1.12.1](https://github.com/mini-app-polis/deejay-cog/compare/v1.12.0...v1.12.1) (2026-04-04)
 
 
