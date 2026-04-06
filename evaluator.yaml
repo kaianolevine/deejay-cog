@@ -1,0 +1,7 @@
+# deejay-cog / evaluator.yaml
+# Per-repo evaluation configuration — ecosystem-standards ADR-001, ADR-002
+
+type: pipeline-cog
+
+# No traits, no exemptions, no deferrals.
+# deejay-cog had no exceptions in ecosystem.yaml — cleanest repo in the ecosystem.
