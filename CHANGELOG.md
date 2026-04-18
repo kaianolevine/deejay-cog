@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/mini-app-polis/deejay-cog/compare/v1.20.0...v1.21.0) (2026-04-18)
+
+
+### Features
+
+* follow up to evaluation cog changes ([6f9884d](https://github.com/mini-app-polis/deejay-cog/commit/6f9884d400f12e017b581f832a828fb30e48e52d))
+
 # [1.20.0](https://github.com/mini-app-polis/deejay-cog/compare/v1.19.0...v1.20.0) (2026-04-18)
 
 
