@@ -394,22 +394,33 @@ def retag_music_flow() -> RetagSummary:
         summary.failed,
     )
 
-    post_run_finding(
-        flow_name="retag-music",
-        severity="SUCCESS",
-        production_only=False,
-        sets_imported=summary.uploaded,
-        sets_failed=summary.failed,
-        sets_skipped=summary.skipped,
-        total_tracks=summary.scanned,
-        scanned=summary.scanned,
-        downloaded=summary.downloaded,
-        identified=summary.identified,
-        tagged=summary.tagged,
-        uploaded=summary.uploaded,
-        deleted=summary.deleted,
-        failed=summary.failed,
-    )
+    _post_kwargs = {
+        "flow_name": "retag-music",
+        "production_only": False,
+        "sets_imported": summary.uploaded,
+        "sets_failed": summary.failed,
+        "sets_skipped": summary.skipped,
+        "total_tracks": summary.scanned,
+        "scanned": summary.scanned,
+        "downloaded": summary.downloaded,
+        "identified": summary.identified,
+        "tagged": summary.tagged,
+        "uploaded": summary.uploaded,
+        "deleted": summary.deleted,
+        "failed": summary.failed,
+    }
+    if summary.failed == 0:
+        post_run_finding(severity="SUCCESS", **_post_kwargs)
+    else:
+        post_run_finding(
+            severity="WARN",
+            text=(
+                f"Completed with issues: failed={summary.failed} "
+                f"of scanned={summary.scanned}. "
+                "Check AcoustID/MusicBrainz logs for identification failures."
+            ),
+            **_post_kwargs,
+        )
     return summary
 
 

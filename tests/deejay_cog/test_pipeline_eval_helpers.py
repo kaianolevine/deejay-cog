@@ -78,7 +78,7 @@ def test_post_run_finding_success_default_text(monkeypatch) -> None:
     with patch("evaluator_cog.flows.pipeline_eval.evaluate_pipeline_run") as ev:
         pe.post_run_finding("f", "SUCCESS", production_only=True)
     assert ev.call_args.kwargs["direct_finding_text"] == "Run completed successfully."
-    assert ev.call_args.kwargs["direct_severity"] == "INFO"
+    assert ev.call_args.kwargs["direct_severity"] == "SUCCESS"
 
 
 def test_post_run_finding_swallows_evaluate_exception(monkeypatch) -> None:

@@ -396,6 +396,84 @@ def test_retag_music_flow_processes_files_and_returns_summary(
     mock_post.assert_called_once()
 
 
+def test_retag_music_post_run_finding_success_when_zero_failures(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
+    monkeypatch.setenv("MAX_UPLOADS_PER_RUN", "10")
+
+    file_a = _make_file("id-a", "a.mp3")
+    drive = _make_drive(files=[file_a])
+    g = SimpleNamespace(drive=drive)
+
+    metadata = _make_metadata()
+    id_result = _make_id_result(chosen_conf=0.95, metadata=metadata)
+    identifier = MagicMock()
+    identifier.identify.return_value = id_result
+
+    tagger = MagicMock()
+    tagger.dump.return_value = {}
+
+    renamed_path = str(tmp_path / "Artist - Track Title.mp3")
+    renamer = MagicMock()
+    renamer.apply.return_value = _make_rename_result(
+        renamed_path, "Artist - Track Title.mp3"
+    )
+
+    with (
+        patch.object(retag.GoogleAPI, "from_env", return_value=g),
+        patch.object(retag, "Mp3Identifier") as mock_identifier_cls,
+        patch.object(retag, "Mp3Tagger", return_value=tagger),
+        patch.object(retag, "Mp3Renamer", return_value=renamer),
+        patch.object(retag, "post_run_finding") as mock_post,
+        patch.object(retag, "_list_music_files", return_value=[file_a]),
+        patch("deejay_cog.retag_music.tempfile.gettempdir", return_value=str(tmp_path)),
+        prefect_test_harness(),
+    ):
+        mock_identifier_cls.from_env.return_value = identifier
+        summary = retag.retag_music_flow.fn()
+
+    assert summary.failed == 0
+    mock_post.assert_called_once()
+    assert mock_post.call_args.kwargs["severity"] == "SUCCESS"
+
+
+def test_retag_music_post_run_finding_warn_when_files_fail(
+    monkeypatch, tmp_path
+) -> None:
+    """End-of-flow finding is WARN when any file processing increments failed."""
+    monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
+    monkeypatch.setenv("MAX_UPLOADS_PER_RUN", "10")
+
+    bad_file = _make_file("id-bad", "bad.mp3")
+    drive = _make_drive(files=[bad_file])
+    drive.download_file.side_effect = RuntimeError("download failed")
+    g = SimpleNamespace(drive=drive)
+
+    identifier = MagicMock()
+    tagger = MagicMock()
+    renamer = MagicMock()
+
+    with (
+        patch.object(retag.GoogleAPI, "from_env", return_value=g),
+        patch.object(retag, "Mp3Identifier") as mock_identifier_cls,
+        patch.object(retag, "Mp3Tagger", return_value=tagger),
+        patch.object(retag, "Mp3Renamer", return_value=renamer),
+        patch.object(retag, "post_run_finding") as mock_post,
+        patch.object(retag, "_list_music_files", return_value=[bad_file]),
+        patch("deejay_cog.retag_music.tempfile.gettempdir", return_value=str(tmp_path)),
+        prefect_test_harness(),
+    ):
+        mock_identifier_cls.from_env.return_value = identifier
+        summary = retag.retag_music_flow.fn()
+
+    assert summary.failed == 1
+    mock_post.assert_called_once()
+    assert mock_post.call_args.kwargs["severity"] == "WARN"
+    assert "failed=1" in mock_post.call_args.kwargs["text"]
+    assert "scanned=1" in mock_post.call_args.kwargs["text"]
+
+
 def test_retag_music_flow_respects_max_uploads_per_run(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
     monkeypatch.setenv("MAX_UPLOADS_PER_RUN", "1")

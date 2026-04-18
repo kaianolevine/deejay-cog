@@ -18,10 +18,6 @@ retag_music) call these helpers with production_only=False, which makes
 the hook fire locally (logs the failure) but unconditionally skips the
 API post. This prevents local development runs from cluttering the
 pipeline_evaluations table regardless of which env vars are set.
-
-Public severities include SUCCESS; evaluator-cog's direct-finding path
-only accepts INFO / WARN / ERROR, so SUCCESS is mapped to INFO when
-calling evaluate_pipeline_run.
 """
 
 from __future__ import annotations
@@ -112,9 +108,7 @@ def _should_post(production_only: bool) -> bool:
 
 
 def _direct_severity_for_eval(severity: Severity) -> str:
-    """Map public SUCCESS to evaluator INFO (direct findings)."""
-    if severity == "SUCCESS":
-        return "INFO"
+    """Pass severity through unchanged. Pipeline Health UI renders SUCCESS."""
     return severity
 
 
