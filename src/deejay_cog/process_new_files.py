@@ -310,8 +310,8 @@ def _ingest_set_to_api(
         from mini_app_polis.api import KaianoApiClient  # type: ignore
         from mini_app_polis.api.errors import KaianoApiError  # type: ignore
     except Exception as e:
-        logger.error(
-            "❌ API client not available; skipping ingest for %s: %s", label, e
+        logger.warning(
+            "⚠️ API client not available; skipping ingest for %s: %s", label, e
         )
         return
 
