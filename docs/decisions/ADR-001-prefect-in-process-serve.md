@@ -1,4 +1,4 @@
-# 0001. Run Prefect flows in-process via `prefect.serve()`
+# ADR-001: Run Prefect flows in-process via prefect.serve()
 
 Date: 2026-04-20
 
@@ -10,9 +10,9 @@ Accepted
 
 Prefect Cloud supports two primary deployment patterns:
 
-1. **Work pools** — flows are registered with a work pool; separate
+1. **Work pools** - flows are registered with a work pool; separate
    worker processes pull work from the pool and execute flows.
-2. **Serve** — a single process registers flows and stays alive,
+2. **Serve** - a single process registers flows and stays alive,
    handling scheduled and manually triggered runs itself.
 
 Work pools are more flexible for heterogeneous fleets (multi-cloud,
@@ -33,11 +33,11 @@ secrets. No work pool is configured.
 
 `main.py` serves two deployments:
 
-- `process-new-files` — `process_new_csv_files_flow`
-- `ingest-live-history` — `ingest_live_history`
+- `process-new-files` - `process_new_csv_files_flow`
+- `ingest-live-history` - `ingest_live_history`
 
 Other flows (`generate_summaries`, `update_deejay_set_collection`,
-`retag_music`) are deferred — not served on Railway because they are
+`retag_music`) are deferred - not served on Railway because they are
 run manually or on a different cadence.
 
 ## Consequences

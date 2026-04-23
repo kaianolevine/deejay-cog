@@ -18,11 +18,13 @@ retag_music) call these helpers with production_only=False, which makes
 the hook fire locally (logs the failure) but unconditionally skips the
 API post. This prevents local development runs from cluttering the
 pipeline_evaluations table regardless of which env vars are set.
+
+See docs/decisions/ADR-004-best-effort-pipeline-eval.md for the
+decision record.
 """
 
 from __future__ import annotations
 
-import logging
 import os
 from collections.abc import Callable
 from typing import Any, Literal
@@ -57,10 +59,16 @@ _EVALUATOR_KWARGS = frozenset(
 )
 
 
-def get_prefect_logger() -> logging.Logger:
+def get_prefect_logger() -> Any:
     """
     Return the Prefect run logger if called inside a flow context,
     otherwise the module logger. Satisfies PIPE-006.
+
+    Return type is Any because the two code paths return different
+    concrete types (Prefect's get_run_logger returns a LoggerAdapter,
+    mini_app_polis.logger.get_logger returns the shared logger wrapper).
+    Callers treat the result as a structural logger -- anything with
+    .debug/.info/.warning/.error/.exception methods works.
     """
     try:
         return get_run_logger()
