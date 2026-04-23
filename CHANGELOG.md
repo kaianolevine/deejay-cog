@@ -1,3 +1,10 @@
+## [1.21.2](https://github.com/mini-app-polis/deejay-cog/compare/v1.21.1...v1.21.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* **deejay-cog:** except CD-010 (on-demand cog, no expected cadence) ([33cc6cf](https://github.com/mini-app-polis/deejay-cog/commit/33cc6cff01ad4e28cea1b71712c3b27b7d54c0df))
+
 ## [1.21.1](https://github.com/mini-app-polis/deejay-cog/compare/v1.21.0...v1.21.1) (2026-04-20)
 
 
