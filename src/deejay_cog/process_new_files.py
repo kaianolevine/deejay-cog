@@ -388,6 +388,30 @@ def _sync_set_to_spotify(
             stats.spotify_failed += 1
 
 
+def _file_already_in_folder(g: GoogleAPI, file_id: str, folder_id: str) -> bool:
+    """Return True if file_id is currently parented under folder_id.
+
+    Used to make archive-step moves idempotent: if a prior run of
+    process_csv_file archived the file before a later task failed,
+    the retry must not crash on "file missing from source parent."
+
+    Best-effort — on any metadata-fetch error, returns False so the
+    caller falls through to the normal move path (which will surface
+    any real Drive API error).
+    """
+    try:
+        meta = g.drive.service.files().get(fileId=file_id, fields="parents").execute()
+        parents = meta.get("parents", []) or []
+        return folder_id in parents
+    except Exception as exc:
+        log.warning(
+            "Could not read Drive parents for file_id=%s: %s. Falling through to move.",
+            file_id,
+            exc,
+        )
+        return False
+
+
 @task(name="process-csv-file")
 def process_csv_file(
     g: GoogleAPI,
@@ -434,10 +458,19 @@ def process_csv_file(
 
         try:
             archive_folder_id = g.drive.ensure_folder(year_folder_id, "Archive")
-            g.drive.move_file(
-                file_id, new_parent_id=archive_folder_id, remove_from_parents=True
-            )
-            logger.info(f"📦 Moved original file to Archive subfolder: {filename}")
+            if _file_already_in_folder(g, file_id, archive_folder_id):
+                logger.info(
+                    f"📦 Already archived: {filename} "
+                    f"(file_id={file_id}). Skipping move — "
+                    "likely a retry after partial-failure."
+                )
+            else:
+                g.drive.move_file(
+                    file_id,
+                    new_parent_id=archive_folder_id,
+                    remove_from_parents=True,
+                )
+                logger.info(f"📦 Moved original file to Archive subfolder: {filename}")
 
             base_name = os.path.splitext(filename)[0]
             set_date, venue = _extract_date_and_venue(base_name)
@@ -492,7 +525,7 @@ def process_csv_file(
 @flow(
     name="process-new-csv-files",
     description="Normalize new DJ set CSVs, upload to "
-    "Google Sheets, archive, and ingest to API.",
+    "Google Sheets, archive (idempotent), and ingest to API.",
     on_failure=[make_failure_hook("process-new-csv-files")],
     on_crashed=[make_failure_hook("process-new-csv-files")],
 )

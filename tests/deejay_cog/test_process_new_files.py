@@ -203,6 +203,76 @@ def test_temp_file_is_removed_in_all_cases(tmp_path):
     assert not os.path.exists(temp_path)
 
 
+def test_file_already_in_folder_returns_true_when_parent_matches():
+    from deejay_cog.process_new_files import _file_already_in_folder
+
+    g = MagicMock()
+    g.drive.service.files().get().execute.return_value = {
+        "parents": ["archive-folder-id", "some-other-folder"],
+    }
+
+    assert _file_already_in_folder(g, "file-1", "archive-folder-id") is True
+
+
+def test_file_already_in_folder_returns_false_when_parent_missing():
+    from deejay_cog.process_new_files import _file_already_in_folder
+
+    g = MagicMock()
+    g.drive.service.files().get().execute.return_value = {
+        "parents": ["year-folder-id"],
+    }
+
+    assert _file_already_in_folder(g, "file-1", "archive-folder-id") is False
+
+
+def test_file_already_in_folder_returns_false_on_metadata_error():
+    """Best-effort: a metadata-fetch failure must not crash the archive step."""
+    from deejay_cog.process_new_files import _file_already_in_folder
+
+    g = MagicMock()
+    g.drive.service.files().get().execute.side_effect = RuntimeError("drive 500")
+
+    assert _file_already_in_folder(g, "file-1", "archive-folder-id") is False
+
+
+def test_process_csv_file_skips_archive_move_when_already_archived():
+    """PIPE-013 idempotency: if file_id is already under Archive, the
+    archive step does not call move_file a second time. Prevents retries
+    from crashing on files that completed their archive step before a
+    later task errored."""
+    file_meta = {"id": "file-123", "name": "2024-01-03_Venue.csv"}
+
+    def download_file(file_id: str, dest: str) -> None:
+        with open(dest, "w") as f:
+            f.write("Title,Artist\nSong A,Artist A\n")
+
+    drive = SimpleNamespace(
+        download_file=MagicMock(side_effect=download_file),
+        ensure_folder=MagicMock(
+            side_effect=lambda _parent, name: {
+                "Archive": "archive-folder-id",
+            }.get(name, "year-folder-id")
+        ),
+        upload_csv_as_google_sheet=MagicMock(return_value="sheet-id"),
+        move_file=MagicMock(),
+        rename_file=MagicMock(),
+        list_files=MagicMock(return_value=[]),
+        service=MagicMock(),
+    )
+    drive.service.files().get().execute.return_value = {
+        "parents": ["archive-folder-id"],
+    }
+    sheets = SimpleNamespace(
+        formatter=SimpleNamespace(apply_formatting_to_sheet=MagicMock())
+    )
+    g = SimpleNamespace(drive=drive, sheets=sheets)
+
+    with patch.object(process_new_files, "read_tracks_from_sheet", return_value=[]):
+        process_new_files.process_csv_file.fn(g, file_meta, "2024")
+
+    drive.move_file.assert_not_called()
+
+
 # --- API ingest integration ---------------------------------------------------
 
 
