@@ -27,7 +27,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import sentry_sdk
 from dotenv import load_dotenv
@@ -37,16 +37,22 @@ from prefect.flows import flow as prefect_flow
 from deejay_cog.ingest_live_history import ingest_live_history
 from deejay_cog.process_new_files import process_new_csv_files_flow
 
+#: Supported router modes. Declared as a Literal so Prefect Cloud's
+#: "Custom Run" UI renders a dropdown (via the auto-generated JSON-schema
+#: enum) instead of a free-form string field. Adding a new mode?
+#: 1) add the string here, 2) add it to _MODE_DISPATCH, 3) document it
+#: in the module docstring.
+DeejayMode = Literal["process-new-files", "ingest-live-history"]
+
 # Map of supported router modes to the underlying flow functions.
-# Adding a new mode? Register it here and document it in the module docstring.
-_MODE_DISPATCH = {
+_MODE_DISPATCH: dict[str, Any] = {
     "process-new-files": process_new_csv_files_flow,
     "ingest-live-history": ingest_live_history,
 }
 
 
 @flow(name="deejay-cog")
-def deejay_router(mode: str | None = None) -> Any:
+def deejay_router(mode: DeejayMode) -> Any:
     """Single entrypoint flow that dispatches to a sub-flow by `mode`.
 
     Parameters
@@ -58,15 +64,11 @@ def deejay_router(mode: str | None = None) -> Any:
     Raises
     ------
     ValueError
-        If `mode` is missing or not a recognized dispatch key. We never
-        silently default — every caller must opt in to a behavior.
+        If `mode` somehow reaches the body without being a recognized
+        dispatch key. The Literal annotation should already prevent this
+        at Prefect's parameter-validation layer, but we keep the runtime
+        guard so the flow never silently no-ops.
     """
-    if not mode:
-        raise ValueError(
-            "deejay router requires a `mode` parameter. "
-            f"Supported modes: {sorted(_MODE_DISPATCH)}"
-        )
-
     target = _MODE_DISPATCH.get(mode)
     if target is None:
         raise ValueError(
