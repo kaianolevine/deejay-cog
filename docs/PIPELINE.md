@@ -8,10 +8,14 @@ This document describes how **deejay-cog** fits into the Drive → Prefect → A
 
 ### Production (served via `prefect.serve()` on Railway)
 
-| Flow | Module | Role |
-|------|--------|------|
-| **process-new-csv-files** | `process_new_files.py` | Triggered by **watcher-cog** when new CSVs appear in the source folder: normalize, upload to Sheets, archive, ingest to API, Spotify sync. |
-| **ingest-live-history** | `ingest_live_history.py` | Triggered by **watcher-cog** when new VirtualDJ `.m3u` files appear in the VDJ history folder; reads Drive, parses plays, and POSTs to `/v1/live-plays`. **Processes only the most recent `.m3u` file**, not the full history list. |
+A single router-style deployment, **`deejay-cog/deejay`**, is registered with
+Prefect Cloud. Callers (watcher-cog, Prefect UI, CLI) pass a required
+`mode` parameter that selects the underlying flow.
+
+| Mode | Flow | Module | Role |
+|------|------|--------|------|
+| `process-new-files` | **process-new-csv-files** | `process_new_files.py` | Triggered by **watcher-cog** when new CSVs appear in the source folder: normalize, upload to Sheets, archive, ingest to API, Spotify sync. |
+| `ingest-live-history` | **ingest-live-history** | `ingest_live_history.py` | Triggered by **watcher-cog** when new VirtualDJ `.m3u` files appear in the VDJ history folder; reads Drive, parses plays, and POSTs to `/v1/live-plays`. **Processes only the most recent `.m3u` file**, not the full history list. |
 
 ### Local-only (not served; retained for manual validation during the PostgreSQL cutover)
 
@@ -30,7 +34,7 @@ This document describes how **deejay-cog** fits into the Drive → Prefect → A
 
 ## Trigger architecture
 
-**watcher-cog** polls Google Drive (or receives push notifications, depending on deployment). When new files match configured rules, it calls the **Prefect Cloud API** to create a flow run for the appropriate deployment. The **Prefect worker** on Railway runs `python -m deejay_cog.main`, which serves the production flows in-process.
+**watcher-cog** polls Google Drive (or receives push notifications, depending on deployment). When new files match configured rules, it calls the **Prefect Cloud API** to create a flow run on the single `deejay-cog/deejay` deployment, passing the appropriate `mode` parameter. The **Prefect worker** on Railway runs `python -m deejay_cog.main`, which serves the router flow in-process.
 
 Per **PIPE-008** in ecosystem-standards, **watcher-cog → Prefect → cog** is the canonical trigger pattern (not GitHub Actions as orchestrator).
 

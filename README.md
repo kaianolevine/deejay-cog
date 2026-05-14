@@ -8,18 +8,18 @@ Processes DJ set CSV files from Google Drive into Google Sheets (organized by ye
 
 This repository is the backend cog for a Drive-based DJ set pipeline. It reads CSV files (and optionally other files) from a configured Google Drive source folder, normalizes and uploads them as Google Sheets into year-based folders, and can maintain collection and summary artifacts for cross-checks during the PostgreSQL migration.
 
-**Production** flows run on Railway under `python -m deejay_cog.main` (Prefect `serve()`). **watcher-cog** detects Drive changes and creates Prefect runs per **PIPE-008** (watcher-cog → Prefect → cog).
+**Production** runs on Railway under `python -m deejay_cog.main` (Prefect `serve()`), which registers a single router-style deployment (`deejay-cog/deejay`). The router dispatches to the right underlying flow based on a required `mode` parameter (`process-new-files` or `ingest-live-history`). **watcher-cog** detects Drive changes and creates Prefect runs per **PIPE-008** (watcher-cog → Prefect → cog), passing the appropriate `mode`.
 
 ---
 
 ## Flow inventory
 
-### Production (served on Railway)
+### Production (served on Railway as the `deejay-cog/deejay` router)
 
-| Flow | Script | Notes |
-|------|--------|--------|
-| **process-new-csv-files** | `process_new_files.py` | New CSVs → Sheets → archive → API ingest; optional Spotify sync. |
-| **ingest-live-history** | `ingest_live_history.py` | Most recent VirtualDJ `.m3u` from Drive → `POST /v1/live-plays` (not every history file). |
+| Mode | Underlying flow | Script | Notes |
+|------|-----------------|--------|--------|
+| `process-new-files` | **process-new-csv-files** | `process_new_files.py` | New CSVs → Sheets → archive → API ingest; optional Spotify sync. |
+| `ingest-live-history` | **ingest-live-history** | `ingest_live_history.py` | Most recent VirtualDJ `.m3u` from Drive → `POST /v1/live-plays` (not every history file). |
 
 ### Local-only (not served; PostgreSQL cutover helpers)
 
