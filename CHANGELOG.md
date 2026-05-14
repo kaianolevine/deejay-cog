@@ -1,3 +1,10 @@
+## [1.22.1](https://github.com/mini-app-polis/deejay-cog/compare/v1.22.0...v1.22.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* updating deployment name ([56dee11](https://github.com/mini-app-polis/deejay-cog/commit/56dee11512e15b473ad7333d70927cddd8d768a7))
+
 # [1.22.0](https://github.com/mini-app-polis/deejay-cog/compare/v1.21.4...v1.22.0) (2026-05-14)
 
 
