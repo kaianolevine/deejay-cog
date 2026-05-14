@@ -1,3 +1,10 @@
+## [1.22.2](https://github.com/mini-app-polis/deejay-cog/compare/v1.22.1...v1.22.2) (2026-05-14)
+
+
+### Bug Fixes
+
+* updating ui in prefect to run ([372da5a](https://github.com/mini-app-polis/deejay-cog/commit/372da5af672c657fcb3e685eb4c59aed20c6204f))
+
 ## [1.22.1](https://github.com/mini-app-polis/deejay-cog/compare/v1.22.0...v1.22.1) (2026-05-14)
 
 
