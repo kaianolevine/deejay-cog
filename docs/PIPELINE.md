@@ -8,7 +8,7 @@ This document describes how **deejay-cog** fits into the Drive → Prefect → A
 
 ### Production (served via `prefect.serve()` on Railway)
 
-A single router-style deployment, **`deejay-cog/deejay`**, is registered with
+A single router-style deployment, **`deejay-cog/deejay-cog`**, is registered with
 Prefect Cloud. Callers (watcher-cog, Prefect UI, CLI) pass a required
 `mode` parameter that selects the underlying flow.
 
@@ -34,7 +34,7 @@ Prefect Cloud. Callers (watcher-cog, Prefect UI, CLI) pass a required
 
 ## Trigger architecture
 
-**watcher-cog** polls Google Drive (or receives push notifications, depending on deployment). When new files match configured rules, it calls the **Prefect Cloud API** to create a flow run on the single `deejay-cog/deejay` deployment, passing the appropriate `mode` parameter. The **Prefect worker** on Railway runs `python -m deejay_cog.main`, which serves the router flow in-process.
+**watcher-cog** polls Google Drive (or receives push notifications, depending on deployment). When new files match configured rules, it calls the **Prefect Cloud API** to create a flow run on the single `deejay-cog/deejay-cog` deployment, passing the appropriate `mode` parameter. The **Prefect worker** on Railway runs `python -m deejay_cog.main`, which serves the router flow in-process.
 
 Per **PIPE-008** in ecosystem-standards, **watcher-cog → Prefect → cog** is the canonical trigger pattern (not GitHub Actions as orchestrator).
 

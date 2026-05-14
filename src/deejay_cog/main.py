@@ -1,8 +1,8 @@
 """
 Application entrypoint for deejay-cog.
 
-Registers a single router-style Prefect deployment (`deejay-cog/deejay`) and
-starts a runner loop that polls for scheduled or manually triggered runs.
+Registers a single router-style Prefect deployment (`deejay-cog/deejay-cog`)
+and starts a runner loop that polls for scheduled or manually triggered runs.
 
 The router flow dispatches to one of the underlying production flows based
 on the `mode` parameter. Callers (watcher-cog, Prefect UI, REST API, CLI)
@@ -45,7 +45,7 @@ _MODE_DISPATCH = {
 }
 
 
-@flow(name="deejay")
+@flow(name="deejay-cog")
 def deejay_router(mode: str | None = None) -> Any:
     """Single entrypoint flow that dispatches to a sub-flow by `mode`.
 
@@ -91,7 +91,7 @@ def main() -> None:
         entrypoint="src/deejay_cog/main.py:deejay_router",
     )
 
-    serve(router.to_deployment(name="deejay"))
+    serve(router.to_deployment(name="deejay-cog"))
 
 
 if __name__ == "__main__":

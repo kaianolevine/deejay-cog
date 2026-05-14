@@ -38,7 +38,7 @@ deejay-cog runs on Railway as an always-on worker service.
 
 **Railway start command:** `python -m deejay_cog.main`
 
-This registers a single **router-style** deployment (`deejay-cog/deejay`)
+This registers a single **router-style** deployment (`deejay-cog/deejay-cog`)
 with Prefect Cloud and starts a runner loop that polls for scheduled or
 manually triggered runs. The router dispatches to the underlying production
 flow based on a required `mode` parameter:
@@ -56,7 +56,7 @@ All environment variables from Railway are available to flows at runtime.
 2. Set all environment variables from `.env.example` in the Railway dashboard
 3. Set the start command to `python -m deejay_cog.main`
 4. Deploy — the service will start and register the served deployment with Prefect Cloud
-5. Go to Prefect Cloud UI → Deployments and grab the new UUID for `deejay-cog/deejay`
+5. Go to Prefect Cloud UI → Deployments and grab the new UUID for `deejay-cog/deejay-cog`
 6. Update `watcher-cog`'s WATCHERS config with the new deployment UUID (both dj-sets and live-history watchers point at the same UUID; they pass different `mode` parameters)
 7. Redeploy `watcher-cog`
 
@@ -64,7 +64,7 @@ All environment variables from Railway are available to flows at runtime.
 
 The single `deejay` deployment is triggerable via:
 - Prefect Cloud UI — manual "Custom Run", passing `mode` in parameters
-- Prefect CLI — `prefect deployment run deejay-cog/deejay -p mode=process-new-files`
+- Prefect CLI — `prefect deployment run deejay-cog/deejay-cog -p mode=process-new-files`
 - watcher-cog — calls `run_deployment()` with the deployment UUID and `parameters={"mode": "..."}`
 - Prefect REST API — any HTTP client
 
