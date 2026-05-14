@@ -1,3 +1,10 @@
+# [1.22.0](https://github.com/mini-app-polis/deejay-cog/compare/v1.21.4...v1.22.0) (2026-05-14)
+
+
+### Features
+
+* moving to single deployment ([48fc404](https://github.com/mini-app-polis/deejay-cog/commit/48fc40465b867ed000452c05b292bb1831e5e198))
+
 ## [1.21.4](https://github.com/mini-app-polis/deejay-cog/compare/v1.21.3...v1.21.4) (2026-05-10)
 
 
