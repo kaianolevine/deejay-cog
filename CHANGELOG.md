@@ -1,3 +1,15 @@
+# [1.23.0](https://github.com/mini-app-polis/deejay-cog/compare/v1.22.2...v1.23.0) (2026-05-17)
+
+
+### Bug Fixes
+
+* testing speed increase ([b7c73b5](https://github.com/mini-app-polis/deejay-cog/commit/b7c73b5e3982ae8eeef0b79b245e2b52927a3ac0))
+
+
+### Features
+
+* moving pipeline eval to common use ([40732d9](https://github.com/mini-app-polis/deejay-cog/commit/40732d9887212ce7664962294f64a78e35d0d61f))
+
 ## [1.22.2](https://github.com/mini-app-polis/deejay-cog/compare/v1.22.1...v1.22.2) (2026-05-14)
 
 
