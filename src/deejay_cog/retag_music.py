@@ -41,6 +41,7 @@ System dependencies (must be present in the runtime environment):
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from dataclasses import dataclass, field
 from typing import Any
@@ -62,7 +63,9 @@ from deejay_cog._pipeline_eval import (
 log = logger_mod.get_logger()
 
 # Retry backoff: short during tests, normal in production.
-_RETAG_MUSIC_RETRY_DELAY = 0 if os.getenv("PYTEST_CURRENT_TEST") else 15
+# Checking sys.modules is reliable at import time; PYTEST_CURRENT_TEST
+# is only set while a test function runs, not during collection/import.
+_RETAG_MUSIC_RETRY_DELAY = 0 if "pytest" in sys.modules else 15
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +147,7 @@ def _format_metadata_summary(metadata: Any) -> str:
 @dataclass
 class RetagSummary:
     """TODO: describe this class."""
+
     scanned: int = 0
     downloaded: int = 0
     identified: int = 0

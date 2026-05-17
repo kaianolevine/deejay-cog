@@ -1,6 +1,7 @@
 import contextlib
 import os
 import re
+import sys
 from dataclasses import dataclass, field
 
 from mini_app_polis import logger as logger_mod
@@ -29,7 +30,10 @@ os.environ.setdefault("CSV_SOURCE_FOLDER_ID", "1t4d_8lMC3ZJfSyainbpwInoDta7n69hC
 os.environ.setdefault("DJ_SETS_FOLDER_ID", "1A0tKQ2DBXI1Bt9h--olFwnBNne3am-rL")
 
 # Retry backoff: zero delay under pytest so retries do not slow the suite.
-_INGEST_TO_API_RETRY_DELAY = 0 if os.getenv("PYTEST_CURRENT_TEST") else 30
+# Checking sys.modules is reliable at import time; the previously-used
+# PYTEST_CURRENT_TEST env var is only set while a test function is
+# running, not when this module is first imported during collection.
+_INGEST_TO_API_RETRY_DELAY = 0 if "pytest" in sys.modules else 30
 
 
 @dataclass

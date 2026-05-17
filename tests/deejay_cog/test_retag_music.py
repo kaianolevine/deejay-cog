@@ -1,8 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from prefect.testing.utilities import prefect_test_harness
-
 import deejay_cog.retag_music as retag
 
 # ---------------------------------------------------------------------------
@@ -333,13 +331,12 @@ def test_retag_music_file_records_failure_on_exception(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_retag_music_flow_skips_when_no_acoustid_key(monkeypatch) -> None:
+def test_retag_music_flow_skips_when_no_acoustid_key(
+    monkeypatch, prefect_test_harness
+) -> None:
     monkeypatch.delenv("ACOUSTID_API_KEY", raising=False)
 
-    with (
-        patch.object(retag, "post_run_finding") as mock_post,
-        prefect_test_harness(),
-    ):
+    with patch.object(retag, "post_run_finding") as mock_post:
         summary = retag.retag_music_flow.fn()
 
     assert summary.scanned == 0
@@ -348,7 +345,7 @@ def test_retag_music_flow_skips_when_no_acoustid_key(monkeypatch) -> None:
 
 
 def test_retag_music_flow_processes_files_and_returns_summary(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, prefect_test_harness
 ) -> None:
     monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
     monkeypatch.setenv("MAX_UPLOADS_PER_RUN", "10")
@@ -381,7 +378,6 @@ def test_retag_music_flow_processes_files_and_returns_summary(
         patch.object(retag, "post_run_finding") as mock_post,
         patch.object(retag, "_list_music_files", return_value=[file_a, file_b]),
         patch("deejay_cog.retag_music.tempfile.gettempdir", return_value=str(tmp_path)),
-        prefect_test_harness(),
     ):
         mock_identifier_cls.from_env.return_value = identifier
         summary = retag.retag_music_flow.fn()
@@ -397,7 +393,7 @@ def test_retag_music_flow_processes_files_and_returns_summary(
 
 
 def test_retag_music_post_run_finding_success_when_zero_failures(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, prefect_test_harness
 ) -> None:
     monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
     monkeypatch.setenv("MAX_UPLOADS_PER_RUN", "10")
@@ -428,7 +424,6 @@ def test_retag_music_post_run_finding_success_when_zero_failures(
         patch.object(retag, "post_run_finding") as mock_post,
         patch.object(retag, "_list_music_files", return_value=[file_a]),
         patch("deejay_cog.retag_music.tempfile.gettempdir", return_value=str(tmp_path)),
-        prefect_test_harness(),
     ):
         mock_identifier_cls.from_env.return_value = identifier
         summary = retag.retag_music_flow.fn()
@@ -439,7 +434,7 @@ def test_retag_music_post_run_finding_success_when_zero_failures(
 
 
 def test_retag_music_post_run_finding_warn_when_files_fail(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, prefect_test_harness
 ) -> None:
     """End-of-flow finding is WARN when any file processing increments failed."""
     monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
@@ -462,7 +457,6 @@ def test_retag_music_post_run_finding_warn_when_files_fail(
         patch.object(retag, "post_run_finding") as mock_post,
         patch.object(retag, "_list_music_files", return_value=[bad_file]),
         patch("deejay_cog.retag_music.tempfile.gettempdir", return_value=str(tmp_path)),
-        prefect_test_harness(),
     ):
         mock_identifier_cls.from_env.return_value = identifier
         summary = retag.retag_music_flow.fn()
@@ -474,7 +468,9 @@ def test_retag_music_post_run_finding_warn_when_files_fail(
     assert "scanned=1" in mock_post.call_args.kwargs["text"]
 
 
-def test_retag_music_flow_respects_max_uploads_per_run(monkeypatch, tmp_path) -> None:
+def test_retag_music_flow_respects_max_uploads_per_run(
+    monkeypatch, tmp_path, prefect_test_harness
+) -> None:
     monkeypatch.setenv("ACOUSTID_API_KEY", "test-key")
     monkeypatch.setenv("MAX_UPLOADS_PER_RUN", "1")
 
@@ -506,7 +502,6 @@ def test_retag_music_flow_respects_max_uploads_per_run(monkeypatch, tmp_path) ->
         patch.object(retag, "post_run_finding"),
         patch.object(retag, "_list_music_files", return_value=files),
         patch("deejay_cog.retag_music.tempfile.gettempdir", return_value=str(tmp_path)),
-        prefect_test_harness(),
     ):
         mock_identifier_cls.from_env.return_value = identifier
         summary = retag.retag_music_flow.fn()

@@ -3,13 +3,12 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from prefect.testing.utilities import prefect_test_harness
-
 import deejay_cog.process_new_files as process_new_files
 
 
 def test_main_posts_single_success_finding_when_llm_and_api_configured(
     monkeypatch,
+    prefect_test_harness,
 ) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic")
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
@@ -35,8 +34,7 @@ def test_main_posts_single_success_finding_when_llm_and_api_configured(
         patch.object(process_new_files, "config") as mock_cfg,
     ):
         mock_cfg.CSV_SOURCE_FOLDER_ID = "src-folder"
-        with prefect_test_harness():
-            process_new_files.main()
+        process_new_files.main()
 
     mock_post.assert_called_once()
     kw = mock_post.call_args.kwargs
@@ -49,7 +47,9 @@ def test_main_posts_single_success_finding_when_llm_and_api_configured(
     assert kw["collection_update"] is False
 
 
-def test_main_skips_evaluate_without_anthropic(monkeypatch) -> None:
+def test_main_skips_evaluate_without_anthropic(
+    monkeypatch, prefect_test_harness
+) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
 
@@ -63,13 +63,14 @@ def test_main_skips_evaluate_without_anthropic(monkeypatch) -> None:
         patch.object(process_new_files, "config") as mock_cfg,
     ):
         mock_cfg.CSV_SOURCE_FOLDER_ID = "src-folder"
-        with prefect_test_harness():
-            process_new_files.main()
+        process_new_files.main()
 
     mock_post.assert_called_once()
 
 
-def test_main_posts_single_warn_finding_when_sets_failed(monkeypatch) -> None:
+def test_main_posts_single_warn_finding_when_sets_failed(
+    monkeypatch, prefect_test_harness
+) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic")
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://api.example")
 
@@ -94,8 +95,7 @@ def test_main_posts_single_warn_finding_when_sets_failed(monkeypatch) -> None:
         patch.object(process_new_files, "config") as mock_cfg,
     ):
         mock_cfg.CSV_SOURCE_FOLDER_ID = "src-folder"
-        with prefect_test_harness():
-            process_new_files.main()
+        process_new_files.main()
 
     mock_post.assert_called_once()
     assert mock_post.call_args.kwargs["severity"] == "WARN"
@@ -510,7 +510,9 @@ def test_process_non_csv_file_moves_to_year_folder():
 # ── Failure path (TEST-003) ───────────────────────────────────────────────────
 
 
-def test_main_flow_continues_after_single_file_failure(monkeypatch) -> None:
+def test_main_flow_continues_after_single_file_failure(
+    monkeypatch, prefect_test_harness
+) -> None:
     """Main pipeline loop does not abort when process_csv_file raises — continues to next."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     monkeypatch.setenv("KAIANO_API_BASE_URL", "")
@@ -542,8 +544,7 @@ def test_main_flow_continues_after_single_file_failure(monkeypatch) -> None:
         patch.object(process_new_files, "config") as mock_cfg,
     ):
         mock_cfg.CSV_SOURCE_FOLDER_ID = "src-folder"
-        with prefect_test_harness():
-            process_new_files.main()
+        process_new_files.main()
 
     # Both valid files were attempted — the failing one did not abort the loop
     assert call_count == 2

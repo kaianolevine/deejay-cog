@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import os
+import sys
 from typing import Any
 
 import pytz
@@ -22,12 +23,15 @@ from deejay_cog._pipeline_eval import (
 log = logger_mod.get_logger()
 
 # Retry backoff: zero delay under pytest so retries do not slow the suite.
-_PROCESS_M3U_RETRY_DELAY = 0 if os.getenv("PYTEST_CURRENT_TEST") else 10
+# Checking sys.modules is reliable at import time; PYTEST_CURRENT_TEST
+# is only set while a test function runs, not during collection/import.
+_PROCESS_M3U_RETRY_DELAY = 0 if "pytest" in sys.modules else 10
 
 
 @dataclasses.dataclass
 class LiveIngestSummary:
     """TODO: describe this class."""
+
     plays_sent: int
     plays_failed: int
     files_processed: int

@@ -2,8 +2,6 @@ import dataclasses
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from prefect.testing.utilities import prefect_test_harness
-
 import deejay_cog.ingest_live_history as live
 
 
@@ -120,7 +118,9 @@ def test_ingest_live_history_skips_when_no_api_url(monkeypatch) -> None:
     assert summary.files_failed == 0
 
 
-def test_ingest_live_history_sends_plays_and_returns_summary(monkeypatch) -> None:
+def test_ingest_live_history_sends_plays_and_returns_summary(
+    monkeypatch, prefect_test_harness
+) -> None:
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://example.test")
 
     fake_entries = [
@@ -146,7 +146,6 @@ def test_ingest_live_history_sends_plays_and_returns_summary(monkeypatch) -> Non
         patch.object(live, "KaianoApiClient", return_value=client) as mock_client_cls,
         patch.object(live, "M3UToolbox", return_value=m3u_instance),
         patch.object(live, "post_run_finding") as mock_post,
-        prefect_test_harness(),
     ):
         summary = live.ingest_live_history.fn()
 
@@ -169,7 +168,9 @@ def test_ingest_live_history_sends_plays_and_returns_summary(monkeypatch) -> Non
     assert summary.files_failed == 0
 
 
-def test_ingest_live_history_sends_all_parsed_entries(monkeypatch) -> None:
+def test_ingest_live_history_sends_all_parsed_entries(
+    monkeypatch, prefect_test_harness
+) -> None:
     """Parser returns oldest-first; every parsed entry is posted."""
     monkeypatch.setenv("KAIANO_API_BASE_URL", "https://example.test")
 
@@ -199,7 +200,6 @@ def test_ingest_live_history_sends_all_parsed_entries(monkeypatch) -> None:
         patch.object(live, "KaianoApiClient", return_value=client),
         patch.object(live, "M3UToolbox", return_value=m3u_instance),
         patch.object(live, "post_run_finding") as mock_post,
-        prefect_test_harness(),
     ):
         summary = live.ingest_live_history.fn()
 

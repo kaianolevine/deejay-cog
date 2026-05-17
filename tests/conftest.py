@@ -1,6 +1,8 @@
 import sys
 import types
 
+import pytest
+
 
 def _install_mini_app_polis_stubs() -> None:
     """
@@ -92,3 +94,33 @@ def _install_mini_app_polis_stubs() -> None:
 
 
 _install_mini_app_polis_stubs()
+
+
+@pytest.fixture(scope="session")
+def prefect_test_harness():
+    """Session-scoped Prefect test harness.
+
+    Each call to ``prefect.testing.utilities.prefect_test_harness`` boots
+    an in-memory Prefect server (sqlite migrations, event subsystem, the
+    works). Doing that per-test costs ~1–2 s each, which dominated the
+    deejay-cog suite. This fixture spins one up once for the whole
+    session and yields control to every test that asks for it.
+
+    Tests that previously did::
+
+        with prefect_test_harness():
+            my_flow()
+
+    should now consume the fixture and call the flow directly::
+
+        def test_x(prefect_test_harness):
+            my_flow()
+    """
+    # Imported lazily so test collections that don't touch Prefect don't
+    # pay the import cost.
+    from prefect.testing.utilities import (
+        prefect_test_harness as _real_prefect_test_harness,
+    )
+
+    with _real_prefect_test_harness():
+        yield
